@@ -1,0 +1,35 @@
+[package]
+name = "rusty-de"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "rusty_de"
+path = "src/lib.rs"
+
+[build-dependencies]
+glib-build-tools = "0.21"
+
+[dependencies]
+gtk4 = { version = "0.10", features = ["v4_6"] }
+gtk4-layer-shell = "0.6"
+glib = "0.21"
+gio = "0.21"
+gdk4 = "0.10"
+gdk-pixbuf = "0.21"
+chrono = "0.4"
+zbus = "4"
+futures-util = "0.3"
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync"] }
+async-process = "2.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+async-channel = "2.5.0"
+notify = "6.1"
+clap = { version = "4", features = ["derive"] }
+log = "0.4"
+env_logger = "0.11"
+
+[dev-dependencies]
+gtk4-macros = "0.10"

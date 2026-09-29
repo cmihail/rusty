@@ -1,0 +1,381 @@
+* {
+  color: @theme_text_color;
+  font-family: monospace;
+  font-size: 14px;
+}
+
+image {
+  color: @theme_text_color;
+  -gtk-icon-palette: success @success_color, warning @warning_color, error @error_color;
+}
+
+button {
+  border-radius: 15px;
+  border: 1px solid @wm_button_hover_color_b;
+}
+
+button:hover {
+  background: @wm_button_hover_color_a;
+}
+
+.Warning {
+  color: @warning_color;
+}
+
+.Critical {
+  color: @error_color;
+}
+
+.Active {
+  color: @success_color;
+}
+
+window.NotificationPopups {
+  background-color: transparent;
+  padding: 0;
+}
+
+window.OnScreenDisplay {
+  background-color: transparent;
+}
+
+window.OnScreenDisplay button {
+  border: 1px solid @borders;
+  border-radius: 7px;
+  padding-bottom: 7px;
+  padding-left: 7px;
+  padding-right: 7px;
+  padding-top: 6px;
+  opacity: 0.95;
+}
+
+window.OnScreenDisplay label {
+  min-width: 35px;
+}
+
+window.Bar {
+  background-color: transparent;
+}
+
+window.Bar menubutton.Bar > button:first-child {
+  border: 1px solid @borders;
+  border-radius: 7px;
+  padding-bottom: 2px;
+  padding-left: 1px;
+  padding-right: 1px;
+  padding-top: 0;
+  opacity: 0.9;
+}
+
+window.Bar menubutton.Bar > button:first-child label {
+  font-size: 13px;
+}
+
+window.Bar menubutton.Bar > button:first-child label.TimeLabel {
+  letter-spacing: 0;
+}
+
+window.Bar menubutton.Bar > button:first-child label.WorkspaceDigit {
+  font-size: 12px;
+  margin-left: 5px;
+}
+
+separator.BarDotSeparator {
+  background: @theme_text_color;
+  margin-top: 6px;
+  margin-bottom: 6px;
+}
+
+window.Bar box.Overlay {
+  padding-top: 5px;
+  padding-right: 5px;
+}
+
+window.Bar label.NotificationsCount {
+  background-color: @wm_button_active_color_b;
+  border: 1px solid @error_color;
+  border-radius: 100px;
+  color: @error_color;
+  font-size: 8px;
+  margin-right: 1px;
+  margin-top: 1px;
+  padding-left: 3px;
+  padding-right: 3px;
+}
+
+window.Dialog {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+window.Dialog button {
+  min-width: 100px;
+  padding: 10px 40px;
+}
+
+box.Centered {
+  background-color: @wm_button_active_color_b;
+  border-radius: 15px;
+  padding: 20px;
+}
+
+box.ControlCenter {
+  min-width: 280px;
+}
+
+box.ControlCenter .QuickControls button {
+  border-radius: 100px;
+  margin: 2px;
+}
+
+box.ControlCenter .QuickControls button:focus {
+  outline: 2px solid @theme_selected_bg_color;
+  outline-offset: 2px;
+}
+
+box.ControlCenter box.Slider {
+  margin-left: 3px;
+}
+
+box.ControlCenter box.Slider button.SliderIcon {
+  all: unset;
+  padding: 5px;
+  border-radius: 100px;
+}
+
+box.ControlCenter box.Slider button.SliderIcon:hover {
+  background: @wm_button_hover_color_a;
+}
+
+box.ControlCenter box.Slider button.SliderIcon:focus {
+  outline: 2px solid @theme_selected_bg_color;
+  outline-offset: 2px;
+}
+
+box.ControlCenter box.Slider button.SliderExpander {
+  all: unset;
+  padding: 5px;
+  margin-right: 6px;
+  border-radius: 100px;
+}
+
+box.ControlCenter box.Slider button.SliderExpander:hover {
+  background: @wm_button_hover_color_a;
+}
+
+box.ControlCenter box.Slider button.SliderExpander:focus {
+  outline: 2px solid @theme_selected_bg_color;
+  outline-offset: 2px;
+}
+
+box.ControlCenter box.Slider scale:focus {
+  outline: 2px solid @theme_selected_bg_color;
+  outline-offset: 2px;
+}
+
+box.ControlCenter box.Toggle {
+  margin: 4px 3px;
+}
+
+box.ControlCenter box.Toggle button.Toggle {
+  border-right: 0;
+  border-bottom-right-radius: 0;
+  border-top-right-radius: 0;
+  min-height: 35px;
+  min-width: 106px;
+}
+
+box.ControlCenter box.Toggle button.Toggle label.LargeText {
+  font-size: 13px;
+  margin-left: 5px;
+}
+
+box.ControlCenter box.Toggle button.Toggle label.SmallText {
+  font-size: 11px;
+  margin-left: 5px;
+}
+
+box.ControlCenter box.Toggle button.Toggle.NoExpander {
+  border-radius: 15px;
+  min-width: 135px;
+}
+
+box.ControlCenter box.Toggle button.Toggle:checked {
+  background: @theme_selected_bg_color;
+}
+
+box.ControlCenter box.Toggle button.Toggle:checked:hover {
+  filter: brightness(1.15);
+}
+
+box.ControlCenter box.Toggle button.Toggle:focus {
+  outline: 2px solid @theme_selected_bg_color;
+  outline-offset: 2px;
+}
+
+box.ControlCenter box.Toggle button.Expander {
+  border-left: 0px;
+  border-bottom-left-radius: 0;
+  border-top-left-radius: 0;
+  filter: brightness(0.95);
+  padding-left: 5px;
+  padding-right: 7px;
+  min-width: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+box.ControlCenter box.Toggle button.Expander.Active {
+  background: @theme_selected_bg_color;
+  filter: brightness(0.9);
+}
+
+box.ControlCenter box.Toggle button.Expander.Active:hover {
+  background: @theme_selected_bg_color;
+  filter: brightness(1.15);
+}
+
+box.ControlCenter box.Toggle button.Expander:focus {
+  outline: 2px solid @theme_selected_bg_color;
+  outline-offset: 2px;
+}
+
+/* Shared style for revealer content in both Toggles and brightness slider */
+box.ControlCenter box.RevealerContent {
+  background-color: @wm_button_active_color_b;
+  border: 1px solid @theme_selected_bg_color;
+  border-radius: 15px;
+  margin: 5px 2px;
+  padding: 5px;
+}
+
+box.ControlCenter box.RevealerContent > button {
+  border-radius: 10px;
+  padding: 7px 10px;
+  margin: 3px;
+}
+
+box.ControlCenter box.RevealerContent scrolledwindow box.Contents {
+  margin: 4px;
+}
+
+box.ControlCenter box.RevealerContent scrolledwindow box.Contents spinner {
+  margin-right: 8px;
+}
+
+box.ControlCenter box.RevealerContent scrolledwindow box.Contents > box {
+  margin-top: 4px;
+}
+
+box.ControlCenter box.RevealerContent scrolledwindow box.Contents box > image {
+  margin-right: 8px;
+}
+
+box.ControlCenter box.Toggles scrolledwindow box.Contents entry.PasswordEntry {
+  border-radius: 10px;
+  padding: 3px 10px;
+  margin-left: 0;
+  margin-top: 8px;
+}
+
+box.ControlCenter box.Toggles scrolledwindow box.Contents revealer label.ErrorLabel {
+  background-color: @wm_button_active_color_b;
+  border: 1px solid @error_color;
+  border-radius: 10px;
+  padding: 10px;
+  margin-left: 1px;
+  margin-top: 8px;
+}
+
+box.ControlCenter box.Toggles scrolledwindow box.Contents revealer box.PairingConfirmationBox {
+  background-color: @wm_button_active_color_b;
+  border: 1px solid @theme_selected_bg_color;
+  border-radius: 10px;
+  padding: 10px;
+  margin-left: 0px;
+  margin-top: 8px;
+}
+
+box.ControlCenter box.RevealerContent .Header {
+  margin: 4px 4px 0 4px;
+}
+
+box.ControlCenter box.RevealerContent box.SwitchList .Header > label {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+box.ControlCenter box.Toggles label.SmallText {
+  margin-left: 8px;
+}
+
+/* Input method menu items - flat style without borders/corners */
+box.menu button.flat {
+  border: none;
+  border-radius: 0;
+  padding: 8px 12px;
+  margin: 0;
+  background: transparent;
+}
+
+box.menu button.flat:hover {
+  background: @wm_button_hover_color_a;
+}
+
+/* Notifications */
+box.Notification {
+  background-color: @wm_button_active_color_b;
+  border: 1px solid @wm_button_hover_color_b;
+  border-radius: 10px;
+  margin: 3px;
+  padding: 5px;
+  min-width: 270px;
+}
+
+box.Notification box.Header {
+  margin: 4px;
+}
+
+box.Notification box.Header > box label {
+  background-color: @wm_button_active_color_b;
+  border-radius: 100px;
+  border: 1px solid @wm_button_hover_color_b;
+  padding: 0 8px;
+}
+
+box.Notification button {
+  margin: 0;
+  padding: 0;
+}
+
+box.Notification button label {
+  font-size: 12px;
+}
+
+box.Notification button.Action {
+  margin: 0 3px;
+  padding: 1px 10px;
+  border-radius: 10px;
+}
+
+box.Notification label.Summary {
+  margin: 0 5px;
+}
+
+box.Notification label.Body {
+  margin: 5px;
+  font-size: 12px;
+}
+
+box.Notification box.Header > label:first-child {
+  margin-left: 1px;
+}
+
+box.Notification.Critical {
+  border-color: @error_color;
+}
+
+/* System Info */
+button.KillProcess {
+  margin: 0;
+  padding: 0;
+}

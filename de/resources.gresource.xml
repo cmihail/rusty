@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/com/rusty-de/icons">
+    <file compressed="true">scalable/devices/audio-headset-muted-symbolic.svg</file>
+    <file compressed="true">scalable/devices/audio-headphones-muted-symbolic.svg</file>
+    <file compressed="true">scalable/devices/audio-headset-mic-symbolic.svg</file>
+    <file compressed="true">scalable/devices/audio-headset-mic-muted-symbolic.svg</file>
+    <file compressed="true">scalable/devices/display-brightness-off-symbolic.svg</file>
+    <file compressed="true">scalable/devices/display-brightness-low-symbolic.svg</file>
+    <file compressed="true">scalable/devices/display-brightness-medium-symbolic.svg</file>
+    <file compressed="true">scalable/devices/display-brightness-high-symbolic.svg</file>
+    <file compressed="true">scalable/devices/display-brightness-full-symbolic.svg</file>
+    <file compressed="true">scalable/devices/keyboard-brightness-off-symbolic.svg</file>
+    <file compressed="true">scalable/devices/keyboard-brightness-medium-symbolic.svg</file>
+    <file compressed="true">scalable/devices/keyboard-brightness-max-symbolic.svg</file>
+    <file compressed="true">scalable/devices/1-symbolic.svg</file>
+    <file compressed="true">scalable/devices/2-symbolic.svg</file>
+    <file compressed="true">scalable/devices/3-symbolic.svg</file>
+    <file compressed="true">scalable/devices/4-symbolic.svg</file>
+    <file compressed="true">scalable/devices/5-symbolic.svg</file>
+    <file compressed="true">scalable/devices/6-symbolic.svg</file>
+    <file compressed="true">scalable/devices/7-symbolic.svg</file>
+    <file compressed="true">scalable/devices/8-symbolic.svg</file>
+    <file compressed="true">scalable/devices/9-symbolic.svg</file>
+    <file compressed="true">scalable/devices/plus-symbolic.svg</file>
+  </gresource>
+</gresources>

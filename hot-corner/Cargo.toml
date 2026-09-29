@@ -1,0 +1,15 @@
+[package]
+name = "rusty-hot-corner"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+gtk4 = { version = "0.10", features = ["v4_6"] }
+gtk4-layer-shell = "0.6"
+glib = "0.21"
+gdk4 = "0.10"
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+notify = "6.1"
+async-channel = "2.5.0"

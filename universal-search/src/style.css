@@ -1,0 +1,209 @@
+/* Universal Search Styling - Based on AGs config */
+
+* {
+  color: @theme_text_color;
+  font-family: 'Noto Sans Mono', 'Font Awesome 6 Free', 'Font Awesome 6 Brands', monospace;
+  font-size: 14px;
+}
+
+window {
+  background-color: @theme_base_color;
+}
+
+window.UniversalSearch {
+  /* Subtle background contrast using theme colors */
+  background-color: @theme_base_color;
+  padding: 3px 0;
+}
+
+window:backdrop {
+  /* Slightly different background when not in focus */
+  background-color: @theme_unfocused_bg_color;
+}
+
+window.UniversalSearch:backdrop {
+  /* Unfocused state with subtle contrast */
+  background-color: @theme_unfocused_base_color;
+}
+
+
+button {
+  border-radius: 15px;
+  border: 1px solid @wm_button_hover_color_b;
+  padding: 8px 12px;
+  min-height: 28px;
+  background-color: @theme_bg_color;
+  color: @theme_fg_color;
+}
+
+button:hover {
+  background: @wm_button_hover_color_a;
+}
+
+button:active {
+  background-color: @wm_button_active_color_b;
+  color: @theme_fg_color;
+}
+
+button:backdrop {
+  background-color: @theme_unfocused_bg_color;
+  color: @theme_unfocused_fg_color;
+  border-color: @wm_button_hover_color_b;
+}
+
+entry {
+  border-radius: 15px;
+  padding: 5px 10px;
+  background-color: @theme_base_color;
+  color: @theme_text_color;
+  border: 1px solid @borders;
+}
+
+/* UniversalSearch entry styling - matches AGs config */
+window.UniversalSearch entry {
+  min-width: 700px;
+}
+
+entry:backdrop {
+  background-color: @theme_unfocused_base_color;
+  color: @theme_unfocused_text_color;
+  border-color: @unfocused_borders;
+}
+
+separator {
+  /* Use default separator styling - no custom styling */
+}
+
+
+/* Result buttons container - transparent background */
+button box {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  margin: 0;
+  min-height: 16px;
+}
+
+/* Icons in result buttons */
+button image {
+  margin: 0;
+  min-width: 16px;
+  min-height: 16px;
+}
+
+/* Labels in result buttons */
+button label {
+  margin: 0;
+  min-height: 16px;
+}
+
+/* Scrolled window for results */
+scrolledwindow {
+  background: transparent;
+  border: none;
+  border-radius: 15px;
+}
+
+/* AiResult scrolled window specific styling */
+window.UniversalSearch box.AiResult scrolledwindow {
+  background: transparent;
+  border: none;
+  margin: 5px 0;
+}
+
+/* Scrollbar styling */
+scrolledwindow scrollbar {
+  background: @theme_bg_color;
+  border-radius: 8px;
+  border: none;
+}
+
+scrolledwindow scrollbar slider {
+  background: @wm_button_hover_color_a;
+  border-radius: 8px;
+  min-width: 8px;
+  min-height: 8px;
+}
+
+scrolledwindow scrollbar slider:hover {
+  background: @wm_button_hover_color_b;
+}
+
+/* General icons */
+image {
+  min-width: 16px;
+  min-height: 16px;
+}
+
+/* General labels */
+label {
+  min-height: 16px;
+}
+
+/* AI Result container styling - matches AGs box.AiResult */
+window.UniversalSearch box.AiResult {
+  background-color: @wm_button_active_color_b;
+  border: 1px solid @wm_button_hover_color_b;
+  border-radius: 10px;
+  margin: 0;
+  padding: 5px;
+}
+
+/* UniversalSearch button styling - matches AGs config */
+window.UniversalSearch button {
+  padding: 10px 20px;
+}
+
+/* Spinner styling within AiResult */
+window.UniversalSearch box.AiResult spinner {
+  min-width: 16px;
+  min-height: 16px;
+}
+
+/* Labels within AiResult should have nice spacing */
+window.UniversalSearch box.AiResult label {
+  margin: 2px 0;
+}
+
+/* Brave search results loading state styling */
+window.UniversalSearch box.BraveResultsLoading {
+  background-color: @wm_button_active_color_b;
+  border: 1px solid @wm_button_hover_color_b;
+  border-radius: 10px;
+  padding: 5px;
+}
+
+/* Brave search result entry styling */
+window.UniversalSearch box.BraveSearchResultEntry {
+  background-color: @wm_button_active_color_b;
+  border: 1px solid @wm_button_hover_color_b;
+  border-radius: 10px;
+  padding: 5px;
+}
+
+/* Make the first child label bold in Brave search results */
+window.UniversalSearch box.BraveSearchResultEntry > box:first-child label {
+  font-weight: bold;
+}
+
+/* Result number labels (Ctrl+0-9 shortcuts) */
+label.ResultNumber {
+  font-family: 'Noto Sans Mono', monospace;
+  font-size: 12px;
+  font-weight: bold;
+  color: @theme_unfocused_text_color;
+  opacity: 0.7;
+  margin: 0 8px;
+  min-width: 12px;
+  min-height: 12px;
+}
+
+button:focus {
+  outline: 2px solid @theme_selected_bg_color;
+  outline-offset: 2px;
+}
+
+button:checked {
+  background-color: @theme_selected_bg_color;
+  color: @theme_selected_fg_color;
+}

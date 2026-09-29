@@ -1,0 +1,94 @@
+/* GTK4 Screenshot App Styles */
+* {
+    color: @theme_text_color;
+    font-family: 'Noto Sans Mono', 'Font Awesome 6 Free', 'Font Awesome 6 Brands', monospace;
+    font-size: 14px;
+}
+
+button {
+    border-radius: 15px;
+    border: 1px solid @wm_button_hover_color_b;
+    padding: 8px 12px;
+    min-height: 32px;
+    background-color: @theme_bg_color;
+    color: @theme_fg_color;
+}
+
+button:hover {
+    background: @wm_button_hover_color_a;
+}
+
+button:active {
+    background-color: @wm_button_active_color_b;
+    color: @theme_fg_color;
+}
+
+button:backdrop {
+    background-color: @theme_unfocused_bg_color;
+    color: @theme_unfocused_fg_color;
+    border-color: @wm_button_hover_color_b;
+}
+
+window.Screenshot {
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.Centered {
+    background-color: @theme_base_color;
+    border-radius: 15px;
+    padding: 20px;
+    border: 1px solid @borders;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+/* Button specific styling for screenshot options (exclude audio-toggle) */
+.Centered button:not(.audio-toggle) {
+    margin: 4px 0;
+    min-height: 40px;
+    min-width: 200px;
+    padding: 10px 20px;
+}
+
+.Centered button box {
+    margin: 0 8px;
+}
+
+.Centered button image {
+    margin-right: 8px;
+}
+
+.Centered button label {
+    /* text-align is not a valid GTK CSS property - alignment is handled in the code */
+}
+
+/* Title label styling */
+.section-title {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+/* Separator styling */
+separator {
+    background-color: @borders;
+    min-height: 1px;
+    margin: 10px 0;
+}
+
+/* Audio toggle button styling - square button */
+.Centered button.audio-toggle {
+    margin: 4px 0;
+    min-height: 40px;
+    min-width: 60px;
+    padding: 10px 5px;
+}
+
+button:focus {
+    outline: 2px solid @theme_selected_bg_color;
+    outline-offset: 2px;
+}
+
+button:checked {
+    background-color: @theme_selected_bg_color;
+    color: @theme_selected_fg_color;
+}
