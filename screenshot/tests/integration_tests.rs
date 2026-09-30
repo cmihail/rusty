@@ -72,6 +72,12 @@ fn test_file_path_safety() {
     assert!(cmd.contains("'/tmp/test; rm -rf /'"));
 }
 
+#[test]
+fn test_file_path_with_single_quote() {
+    let cmd = screenshot::build_all_monitors_command("/tmp/it's'; rm -rf /; '.png");
+    assert_eq!(cmd, "grim '/tmp/it'\\''s'\\''; rm -rf /; '\\''.png'");
+}
+
 // Mock test for command execution (doesn't actually run screenshot commands)
 #[test]
 fn test_command_structure() {

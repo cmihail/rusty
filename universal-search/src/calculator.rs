@@ -12,8 +12,7 @@ pub struct GnomeCalculatorBackend;
 impl CalculatorBackend for GnomeCalculatorBackend {
     fn calculate(&self, expression: &str) -> Option<String> {
         let output = Command::new("gnome-calculator")
-            .arg("-s")
-            .arg(expression)
+            .arg(format!("--solve={}", expression))
             .output();
 
         match output {
@@ -38,8 +37,7 @@ impl CalculatorBackend for GnomeCalculatorBackend {
 
     fn launch(&self, expression: &str) -> Result<(), std::io::Error> {
         Command::new("gnome-calculator")
-            .arg("-e")
-            .arg(expression)
+            .arg(format!("--equation={}", expression))
             .spawn()?;
 
         Ok(())

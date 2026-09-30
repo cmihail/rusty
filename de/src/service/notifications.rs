@@ -239,6 +239,8 @@ mod imp {
     use glib::{ParamSpec, ParamSpecBuilderExt, Value};
     use std::cell::Cell;
     use std::fs;
+    use std::io::Write;
+    use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
     use std::path::PathBuf;
     use zbus::interface;
 
@@ -268,6 +270,8 @@ mod imp {
                 PathBuf::from(state_home).join("rusty-de")
             } else if let Some(home) = std::env::var_os("HOME") {
                 PathBuf::from(home).join(".local/state/rusty-de")
+            } else if let Some(runtime_dir) = std::env::var_os("XDG_RUNTIME_DIR") {
+                PathBuf::from(runtime_dir).join("rusty-de")
             } else {
                 PathBuf::from("/tmp/rusty-de")
             };
@@ -621,14 +625,30 @@ mod imp {
 
             drop(notifs);
 
+            // Notification bodies can hold 2FA codes and message previews, so keep them owner-only.
             if let Ok(json) = serde_json::to_string_pretty(&state) {
                 if let Some(parent) = self.state_file.parent() {
-                    if !parent.exists() && fs::create_dir_all(parent).is_err() {
+                    if !parent.exists()
+                        && fs::DirBuilder::new()
+                            .recursive(true)
+                            .mode(0o700)
+                            .create(parent)
+                            .is_err()
+                    {
                         return;
                     }
                 }
 
-                fs::write(&self.state_file, json).ok();
+                if let Ok(mut file) = fs::OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .truncate(true)
+                    .mode(0o600)
+                    .open(&self.state_file)
+                {
+                    file.set_permissions(fs::Permissions::from_mode(0o600)).ok();
+                    file.write_all(json.as_bytes()).ok();
+                }
             }
         }
 

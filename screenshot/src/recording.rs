@@ -2,7 +2,7 @@ use chrono::Local;
 use std::fs;
 use std::process::{Command, Stdio};
 
-use crate::screenshot::{ActiveWindow, Monitor};
+use crate::screenshot::{shell_quote, ActiveWindow, Monitor};
 
 pub fn get_video_output_file() -> String {
     let now = Local::now();
@@ -32,17 +32,23 @@ pub fn get_video_output_file_custom(base_path: &str, timestamp: &str) -> String 
 #[allow(dead_code)]
 fn build_all_monitors_recording_command(output_file: &str, with_audio: bool) -> String {
     if with_audio {
-        format!("wf-recorder --audio -f '{}'", output_file)
+        format!("wf-recorder --audio -f {}", shell_quote(output_file))
     } else {
-        format!("wf-recorder -f '{}'", output_file)
+        format!("wf-recorder -f {}", shell_quote(output_file))
     }
 }
 
 pub fn build_select_area_recording_command(output_file: &str, with_audio: bool) -> String {
     if with_audio {
-        format!("wf-recorder -g \"$(slurp)\" --audio -f '{}'", output_file)
+        format!(
+            "wf-recorder -g \"$(slurp)\" --audio -f {}",
+            shell_quote(output_file)
+        )
     } else {
-        format!("wf-recorder -g \"$(slurp)\" -f '{}'", output_file)
+        format!(
+            "wf-recorder -g \"$(slurp)\" -f {}",
+            shell_quote(output_file)
+        )
     }
 }
 
@@ -59,8 +65,13 @@ pub fn build_focused_monitor_recording_command_with_monitor(
         Some(monitor) => {
             let audio_flag = if with_audio { " --audio" } else { "" };
             format!(
-                "wf-recorder -g \"{},{} {}x{}\"{} -f '{}'",
-                monitor.x, monitor.y, monitor.width, monitor.height, audio_flag, output_file
+                "wf-recorder -g \"{},{} {}x{}\"{} -f {}",
+                monitor.x,
+                monitor.y,
+                monitor.width,
+                monitor.height,
+                audio_flag,
+                shell_quote(output_file)
             )
         }
         None => {
@@ -87,8 +98,13 @@ pub fn build_focused_window_recording_command_with_window(
             let height = window.size[1];
             let audio_flag = if with_audio { " --audio" } else { "" };
             format!(
-                "wf-recorder -g \"{},{} {}x{}\"{} -f '{}'",
-                x, y, width, height, audio_flag, output_file
+                "wf-recorder -g \"{},{} {}x{}\"{} -f {}",
+                x,
+                y,
+                width,
+                height,
+                audio_flag,
+                shell_quote(output_file)
             )
         }
         None => {
@@ -146,14 +162,11 @@ pub fn is_recording_active() -> bool {
 }
 
 pub fn show_recording_started_notification(output_file: &str) {
-    let notification_cmd = format!(
-        "notify-send -A 'Stop Recording' 'Recording Started' 'Saving to {}'",
-        output_file
-    );
+    let body = format!("Saving to {}", output_file);
 
     // Block and wait for user response, just like screenshot notifications
-    if let Ok(output) = Command::new("bash")
-        .args(["-c", &notification_cmd])
+    if let Ok(output) = Command::new("notify-send")
+        .args(["-A", "Stop Recording", "Recording Started", &body])
         .output()
     {
         if let Ok(response) = String::from_utf8(output.stdout) {
@@ -169,13 +182,10 @@ pub fn show_recording_started_notification(output_file: &str) {
 }
 
 pub fn show_recording_stopped_notification(output_file: &str) {
-    let notification_cmd = format!(
-        "notify-send -A 'File' -A 'Directory' 'Recording Stopped' 'Saved to {}'",
-        output_file
-    );
+    let body = format!("Saved to {}", output_file);
 
-    if let Ok(output) = Command::new("bash")
-        .args(["-c", &notification_cmd])
+    if let Ok(output) = Command::new("notify-send")
+        .args(["-A", "File", "-A", "Directory", "Recording Stopped", &body])
         .output()
     {
         if let Ok(response) = String::from_utf8(output.stdout) {

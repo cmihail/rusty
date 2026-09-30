@@ -1,5 +1,6 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufRead, Write};
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::PathBuf;
 
 const HISTORY_FILE: &str = ".config/universal-search/history.txt";
@@ -70,14 +71,19 @@ impl History {
 
     fn save(&self) -> io::Result<()> {
         if let Some(parent) = self.file_path.parent() {
-            fs::create_dir_all(parent)?;
+            fs::DirBuilder::new()
+                .recursive(true)
+                .mode(0o700)
+                .create(parent)?;
         }
 
         let mut file = OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(true)
+            .mode(0o600)
             .open(&self.file_path)?;
+        file.set_permissions(fs::Permissions::from_mode(0o600))?;
 
         for entry in &self.entries {
             writeln!(file, "{}", entry)?;

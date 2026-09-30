@@ -86,12 +86,16 @@ pub fn get_active_window() -> Result<ActiveWindow, String> {
     serde_json::from_str(&json_str).map_err(|e| format!("Failed to parse JSON: {}", e))
 }
 
+pub fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
 pub fn build_all_monitors_command(output_file: &str) -> String {
-    format!("grim '{}'", output_file)
+    format!("grim {}", shell_quote(output_file))
 }
 
 pub fn build_select_area_command(output_file: &str) -> String {
-    format!("grim -g \"$(slurp)\" '{}'", output_file)
+    format!("grim -g \"$(slurp)\" {}", shell_quote(output_file))
 }
 
 pub fn build_focused_monitor_command(output_file: &str) -> String {
@@ -105,14 +109,18 @@ pub fn build_focused_monitor_command_with_monitor(
     match monitor.or_else(|| get_focused_monitor().ok()) {
         Some(monitor) => {
             format!(
-                "grim -g \"{},{} {}x{}\" '{}'",
-                monitor.x, monitor.y, monitor.width, monitor.height, output_file
+                "grim -g \"{},{} {}x{}\" {}",
+                monitor.x,
+                monitor.y,
+                monitor.width,
+                monitor.height,
+                shell_quote(output_file)
             )
         }
         None => {
             // Fallback to all monitors if hyprctl fails
             eprintln!("Failed to get focused monitor info, falling back to all monitors");
-            format!("grim '{}'", output_file)
+            format!("grim {}", shell_quote(output_file))
         }
     }
 }
@@ -132,14 +140,18 @@ pub fn build_focused_window_command_with_window(
             let width = window.size[0];
             let height = window.size[1];
             format!(
-                "grim -g \"{},{} {}x{}\" '{}'",
-                x, y, width, height, output_file
+                "grim -g \"{},{} {}x{}\" {}",
+                x,
+                y,
+                width,
+                height,
+                shell_quote(output_file)
             )
         }
         None => {
             // Fallback to select area if hyprctl fails
             eprintln!("Failed to get active window info, falling back to select area");
-            format!("grim -g \"$(slurp)\" '{}'", output_file)
+            format!("grim -g \"$(slurp)\" {}", shell_quote(output_file))
         }
     }
 }
@@ -169,13 +181,10 @@ pub fn execute_screenshot_command(command: &str, output_file: &str) -> Result<()
 }
 
 pub fn show_notification(output_file: &str) {
-    let notification_cmd = format!(
-        "notify-send -A 'File' -A 'Directory' 'Screenshot taken' 'Saved to {}'",
-        output_file
-    );
+    let body = format!("Saved to {}", output_file);
 
-    if let Ok(output) = Command::new("bash")
-        .args(["-c", &notification_cmd])
+    if let Ok(output) = Command::new("notify-send")
+        .args(["-A", "File", "-A", "Directory", "Screenshot taken", &body])
         .output()
     {
         if let Ok(response) = String::from_utf8(output.stdout) {

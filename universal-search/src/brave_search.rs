@@ -68,9 +68,34 @@ fn validate_api_key(api_key: Option<String>) -> Result<String, String> {
     api_key.ok_or_else(|| "Error: BRAVE_SEARCH_API_KEY environment variable not set".to_string())
 }
 
+fn decode_html_entities(text: &str) -> String {
+    let entity = regex::Regex::new(r"&(#[0-9]+|#[xX][0-9a-fA-F]+|amp|lt|gt|quot|apos);").unwrap();
+    entity
+        .replace_all(text, |caps: &regex::Captures| {
+            let name = &caps[1];
+            let decoded = match name {
+                "amp" => Some('&'),
+                "lt" => Some('<'),
+                "gt" => Some('>'),
+                "quot" => Some('"'),
+                "apos" => Some('\''),
+                _ if name.starts_with("#x") || name.starts_with("#X") => {
+                    u32::from_str_radix(&name[2..], 16)
+                        .ok()
+                        .and_then(char::from_u32)
+                }
+                _ => name[1..].parse().ok().and_then(char::from_u32),
+            };
+            decoded.map_or_else(|| caps[0].to_string(), |c| c.to_string())
+        })
+        .into_owned()
+}
+
+// Snippets come from third-party pages, so everything except <strong> must be escaped.
 fn convert_html_to_pango_markup(text: &str) -> String {
-    text.replace("<strong>", "<span foreground=\"#ff8cc8\">")
-        .replace("</strong>", "</span>")
+    glib::markup_escape_text(&decode_html_entities(text))
+        .replace("&lt;strong&gt;", "<span foreground=\"#ff8cc8\">")
+        .replace("&lt;/strong&gt;", "</span>")
 }
 
 fn parse_brave_search_response(response_text: &str) -> Result<Vec<BraveSearchResult>, String> {

@@ -209,12 +209,13 @@ impl GeminiService {
         let api_key = validate_api_key(get_api_key())?;
         let request_body = build_request_body(prompt, &self.history);
 
-        let url = format!("{}/{}:generateContent?key={}", API_BASE_URL, MODEL, api_key);
+        let url = format!("{}/{}:generateContent", API_BASE_URL, MODEL);
 
         let response = self
             .client
             .post(&url)
             .header("Content-Type", "application/json")
+            .header("x-goog-api-key", api_key)
             .json(&request_body)
             .send()
             .await

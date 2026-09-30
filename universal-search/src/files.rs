@@ -65,7 +65,7 @@ impl FileSearcher {
             cmd.arg("--exclude").arg(exclude);
         }
 
-        cmd.arg(query).arg(&home_dir);
+        cmd.arg("--").arg(query).arg(&home_dir);
 
         let output = cmd.output()?;
 

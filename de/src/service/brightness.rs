@@ -17,32 +17,28 @@ pub struct SystemBrightnessBackend;
 
 impl BrightnessBackend for SystemBrightnessBackend {
     fn get_first_device(&self, path: &str) -> String {
+        let mut devices: Vec<String> = std::fs::read_dir(path)
+            .map(|entries| {
+                entries
+                    .filter_map(|entry| entry.ok())
+                    .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                    .collect()
+            })
+            .unwrap_or_default();
+        devices.sort();
+
         // For keyboard backlight, look for devices containing "kbd" or "keyboard"
         if path.contains("/leds") {
-            let output = Command::new("bash")
-                .args([
-                    "-c",
-                    &format!("ls -w1 {} | grep -E 'kbd|keyboard' | head -1", path),
-                ])
-                .output();
-
-            if let Ok(output) = output {
-                let device = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !device.is_empty() {
-                    return device;
-                }
+            if let Some(device) = devices
+                .iter()
+                .find(|d| d.contains("kbd") || d.contains("keyboard"))
+            {
+                return device.clone();
             }
         }
 
         // Fallback to first device
-        let output = Command::new("bash")
-            .args(["-c", &format!("ls -w1 {} | head -1", path)])
-            .output();
-
-        match output {
-            Ok(output) => String::from_utf8_lossy(&output.stdout).trim().to_string(),
-            Err(_) => String::new(),
-        }
+        devices.into_iter().next().unwrap_or_default()
     }
 
     fn get_brightness_value(&self, command: &str, device: &str, is_screen: bool) -> i32 {
