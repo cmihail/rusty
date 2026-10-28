@@ -261,12 +261,13 @@ impl ClientsContent {
         let address = address.to_string();
 
         kill_button.connect_clicked(move |button| {
-            use std::process::{Command, Stdio};
-            let _ = Command::new("hyprctl")
-                .args(["dispatch", "closewindow", &format!("address:0x{}", address)])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn();
+            if let Some(hyprland) = Hyprland::instance() {
+                let window = crate::service::hyprland::address_arg(&address);
+                let _ = hyprland.dispatch(
+                    &format!("hl.dsp.window.close({{ window = '{}' }})", window),
+                    &format!("closewindow {}", window),
+                );
+            }
 
             if let Some(client_box) = button.parent() {
                 if let Some(parent) = client_box.parent() {

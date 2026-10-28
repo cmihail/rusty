@@ -103,30 +103,46 @@ impl Hyprland {
                 continue;
             };
 
+            let address = address_arg(&client.address);
             return self
-                .dispatch(&["focuswindow", &address_arg(&client.address)])
+                .dispatch(
+                    &format!("hl.dsp.focus({{ window = '{}' }})", address),
+                    &format!("focuswindow {}", address),
+                )
                 .is_ok();
         }
 
         false
     }
 
-    pub fn dispatch(&self, args: &[&str]) -> Result<(), String> {
-        use std::process::Command;
-
-        let output = Command::new("hyprctl")
-            .arg("dispatch")
-            .args(args)
-            .output()
-            .map_err(|e| format!("Failed to run hyprctl: {}", e))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("hyprctl dispatch failed: {}", stderr));
+    /// Runs `lua` (e.g. `hl.dsp.window.close()`) under a Lua config, falling back to
+    /// `legacy` (e.g. `killactive`) when Hyprland runs a hyprlang config.
+    pub fn dispatch(&self, lua: &str, legacy: &str) -> Result<(), String> {
+        let stdout = run_hyprctl_dispatch(lua)?;
+        if stdout.starts_with(LEGACY_REJECTION) {
+            run_hyprctl_dispatch(legacy)?;
         }
-
         Ok(())
     }
+}
+
+/// What a hyprlang-config Hyprland answers to a Lua dispatcher expression.
+const LEGACY_REJECTION: &str = "Invalid dispatcher";
+
+fn run_hyprctl_dispatch(arg: &str) -> Result<String, String> {
+    use std::process::Command;
+
+    let output = Command::new("hyprctl")
+        .args(["dispatch", arg])
+        .output()
+        .map_err(|e| format!("Failed to run hyprctl: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("hyprctl dispatch failed: {}", stderr));
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
 impl Default for Hyprland {
