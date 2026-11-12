@@ -89,6 +89,7 @@ fn test_client_creation() {
         class: "firefox".to_string(),
         workspace,
         monitor: 0,
+        pid: 0,
     };
 
     assert_eq!(client.address, "abcd1234");
@@ -117,6 +118,7 @@ fn test_client_fullscreen() {
         class: "vlc".to_string(),
         workspace,
         monitor: 0,
+        pid: 0,
     };
 
     assert_eq!(client.x, 0);
@@ -179,6 +181,7 @@ fn test_client_clone() {
         class: "test".to_string(),
         workspace,
         monitor: 0,
+        pid: 0,
     };
 
     let cloned = original.clone();
@@ -255,6 +258,7 @@ fn test_client_equality() {
         class: "test".to_string(),
         workspace: workspace.clone(),
         monitor: 0,
+        pid: 0,
     };
 
     let client2 = Client {
@@ -267,6 +271,7 @@ fn test_client_equality() {
         class: "test".to_string(),
         workspace,
         monitor: 0,
+        pid: 0,
     };
 
     assert_eq!(client1, client2);
@@ -326,6 +331,7 @@ fn test_client_address_without_0x_prefix() {
         class: "test".to_string(),
         workspace,
         monitor: 0,
+        pid: 0,
     };
 
     // Address should not have 0x prefix

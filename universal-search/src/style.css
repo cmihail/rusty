@@ -10,10 +10,9 @@ window {
   background-color: @theme_base_color;
 }
 
-window.UniversalSearch {
-  /* Subtle background contrast using theme colors */
-  background-color: @theme_base_color;
-  padding: 3px 0;
+window.UniversalSearch,
+window.UniversalSearch:backdrop {
+  background-color: alpha(@borders, 0.5);
 }
 
 window:backdrop {
@@ -21,9 +20,12 @@ window:backdrop {
   background-color: @theme_unfocused_bg_color;
 }
 
-window.UniversalSearch:backdrop {
-  /* Unfocused state with subtle contrast */
-  background-color: @theme_unfocused_base_color;
+.Centered {
+  background-color: @theme_base_color;
+  border-radius: 15px;
+  padding: 20px;
+  border: 1px solid @borders;
+  box-shadow: 0 4px 16px alpha(@borders, 0.6);
 }
 
 

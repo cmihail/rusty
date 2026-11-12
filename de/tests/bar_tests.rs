@@ -1,3 +1,5 @@
+use rusty_de::window::bar::bar_alert_class;
+
 #[test]
 fn test_seconds_to_pretty_time() {
     let test_cases = vec![
@@ -1116,4 +1118,16 @@ fn test_right_stack_battery_highest_priority() {
         child, expected_child,
         "When battery needs attention, it should be shown even if mic is muted"
     );
+}
+
+#[test]
+fn test_bar_alert_class_for_notifications() {
+    assert_eq!(bar_alert_class(true, 0), None);
+    assert_eq!(bar_alert_class(true, 1), Some("Notified"));
+}
+
+#[test]
+fn test_bar_alert_class_prefers_offline_over_notifications() {
+    assert_eq!(bar_alert_class(false, 0), Some("Offline"));
+    assert_eq!(bar_alert_class(false, 4), Some("Offline"));
 }

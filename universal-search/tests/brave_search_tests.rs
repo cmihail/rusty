@@ -3,6 +3,7 @@
 // They don't require actual API calls to avoid network dependencies
 
 use gtk4::prelude::*;
+use rusty_universal_search::brave_search::highlight_matches;
 use rusty_universal_search::brave_search::{BraveSearch, BraveSearchProfile, BraveSearchResult};
 use std::env;
 use std::sync::Once;
@@ -379,4 +380,14 @@ fn test_brave_search_integration_with_gtk_main_loop() {
     assert!(brave_search.loading());
 
     println!("BraveSearch integrates properly with GTK main loop");
+}
+
+#[test]
+fn test_highlight_matches_colors_only_the_matched_words() {
+    let markup = highlight_matches("plain <b>match</b> &lt;b&gt;", "#3a944a");
+
+    assert_eq!(
+        markup,
+        "plain <span foreground=\"#3a944a\">match</span> &lt;b&gt;"
+    );
 }

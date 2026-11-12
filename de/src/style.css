@@ -53,18 +53,103 @@ window.OnScreenDisplay label {
   min-width: 35px;
 }
 
+window.WorkspaceIndicator {
+  background-color: transparent;
+}
+
+window.WorkspaceIndicator label {
+  background-color: alpha(@theme_bg_color, 0.9);
+  border: 1px solid @borders;
+  border-radius: 16px;
+  font-size: 40px;
+  font-weight: bold;
+  min-height: 80px;
+  min-width: 80px;
+}
+
 window.Bar {
   background-color: transparent;
+}
+
+window.DockTrigger {
+  background-color: transparent;
+}
+
+window.Dock {
+  background-color: transparent;
+}
+
+window.Dock box.DockItems {
+  background-color: @theme_bg_color;
+  border: 1px solid @borders;
+  border-radius: 10px;
+  margin-right: 4px;
+  padding: 6px 4px;
+  opacity: 0.95;
+}
+
+/* The icon's inset in dock.rs replaces the padding the corner badge sits in. */
+window.Dock button.DockItem {
+  border-radius: 8px;
+  padding: 0;
+}
+
+window.Dock button.DockItem.minimized {
+  border-style: dashed;
+  opacity: 0.5;
+}
+
+window.Dock button.DockItem.minimized:hover {
+  opacity: 1;
+}
+
+/* The active toggle's accent, with the theme's warning color for notifications. */
+window.Dock label.DockBadge {
+  background-color: @theme_selected_bg_color;
+  border: 2px solid @theme_bg_color;
+  border-radius: 100px;
+  color: @theme_selected_fg_color;
+  font-size: 10px;
+  font-weight: bold;
+  min-height: 15px;
+  min-width: 15px;
+  padding: 0;
+}
+
+window.Dock label.DockNotificationsCount {
+  border: 2px solid @warning_color;
+  border-radius: 100px;
+  color: @warning_color;
+  font-size: 14px;
+  font-weight: bold;
+  min-height: 28px;
+  min-width: 28px;
+}
+
+window.Dock menubutton.DockStatus > button {
+  border-radius: 8px;
+  padding: 6px 4px;
+}
+
+window.Dock label.DockBadge.notified {
+  background-color: @warning_color;
 }
 
 window.Bar menubutton.Bar > button:first-child {
   border: 1px solid @borders;
   border-radius: 7px;
-  padding-bottom: 2px;
-  padding-left: 1px;
-  padding-right: 1px;
-  padding-top: 0;
+  min-height: 0;
+  /* The time label's descent already adds empty space under the digits. */
+  padding: 3px 4px 2px;
   opacity: 0.9;
+}
+
+window.Bar menubutton.Bar.Notified > button:first-child {
+  border-color: @warning_color;
+}
+
+window.Bar menubutton.Bar.Offline > button:first-child {
+  border-color: @error_color;
 }
 
 window.Bar menubutton.Bar > button:first-child label {
@@ -72,7 +157,13 @@ window.Bar menubutton.Bar > button:first-child label {
 }
 
 window.Bar menubutton.Bar > button:first-child label.TimeLabel {
+  font-size: 15px;
   letter-spacing: 0;
+}
+
+/* Lifts the circle to the digits' center, which sits above the label's because of descent. */
+window.Bar overlay.BarBattery {
+  margin-bottom: 2px;
 }
 
 window.Bar menubutton.Bar > button:first-child label.WorkspaceDigit {
@@ -80,31 +171,13 @@ window.Bar menubutton.Bar > button:first-child label.WorkspaceDigit {
   margin-left: 5px;
 }
 
-separator.BarDotSeparator {
-  background: @theme_text_color;
-  margin-top: 6px;
-  margin-bottom: 6px;
-}
-
 window.Bar box.Overlay {
   padding-top: 5px;
   padding-right: 5px;
 }
 
-window.Bar label.NotificationsCount {
-  background-color: @wm_button_active_color_b;
-  border: 1px solid @error_color;
-  border-radius: 100px;
-  color: @error_color;
-  font-size: 8px;
-  margin-right: 1px;
-  margin-top: 1px;
-  padding-left: 3px;
-  padding-right: 3px;
-}
-
 window.Dialog {
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: alpha(@borders, 0.5);
 }
 
 window.Dialog button {

@@ -5,6 +5,7 @@ pub mod favorites;
 pub mod files;
 pub mod gemini;
 pub mod history;
+pub mod overlay;
 pub mod recent_usage;
 
 use apps::{AppSearch, Application as AppEntry};
@@ -16,6 +17,7 @@ use gdk4::prelude::*;
 use gemini::Gemini;
 use glib::Propagation;
 use gtk4::{prelude::*, *};
+use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 use history::History;
 use recent_usage::{RecentApp, RecentFile, RecentUsage};
 use std::cell::RefCell;
@@ -47,20 +49,19 @@ impl SearchWindow {
     fn new(app: &Application) -> Self {
         let window = ApplicationWindow::builder()
             .application(app)
-            .default_width(800)
-            .default_height(700)
             .title("Universal Search")
-            .resizable(true)
+            .decorated(false)
             .css_classes(vec!["UniversalSearch"])
             .build();
+        Self::init_layer_shell(&window);
 
         let main_box = Box::builder()
             .orientation(Orientation::Vertical)
             .spacing(10)
-            .margin_top(20)
-            .margin_bottom(20)
-            .margin_start(20)
-            .margin_end(20)
+            .width_request(800)
+            .height_request(700)
+            .halign(Align::Center)
+            .valign(Align::Center)
             .css_classes(vec!["Centered"])
             .build();
 
@@ -98,6 +99,7 @@ impl SearchWindow {
         main_box.append(&scrolled_window);
 
         window.set_child(Some(&main_box));
+        Self::close_on_click_outside(&window, &main_box);
 
         let app_search = Rc::new(RefCell::new(AppSearch::new()));
         let file_searcher = FileSearcher::new();
@@ -133,6 +135,36 @@ impl SearchWindow {
         search_window.update_results("");
 
         search_window
+    }
+
+    /// A full-screen overlay that dims everything behind the centered launcher.
+    fn init_layer_shell(window: &ApplicationWindow) {
+        window.init_layer_shell();
+        window.set_layer(Layer::Top);
+        window.set_namespace(Some("UniversalSearch"));
+        window.set_keyboard_mode(KeyboardMode::Exclusive);
+        for edge in [Edge::Top, Edge::Bottom, Edge::Left, Edge::Right] {
+            window.set_anchor(edge, true);
+        }
+    }
+
+    fn close_on_click_outside(window: &ApplicationWindow, content: &Box) {
+        let gesture = GestureClick::new();
+        let window_clone = window.clone();
+        let content = content.clone();
+        gesture.connect_released(move |_, _, x, y| {
+            let a = content.allocation();
+            let area = (
+                a.x() as f64,
+                a.y() as f64,
+                a.width() as f64,
+                a.height() as f64,
+            );
+            if overlay::is_outside(area, x, y) {
+                window_clone.close();
+            }
+        });
+        window.add_controller(gesture);
     }
 
     fn setup_signals(&mut self) {
@@ -1300,20 +1332,19 @@ impl SearchWindow {
         let style = widget.as_ref().style_context();
         let luma = |c: &gdk4::RGBA| 0.2126 * c.red() + 0.7152 * c.green() + 0.0722 * c.blue();
 
-        ["accent_color", "theme_selected_bg_color"]
+        let accent = ["accent_color", "theme_selected_bg_color"]
             .iter()
             .filter_map(|name| style.lookup_color(name))
             .max_by(|a, b| luma(a).total_cmp(&luma(b)))
-            .map(|c| {
-                let channel = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-                format!(
-                    "#{:02x}{:02x}{:02x}",
-                    channel(c.red()),
-                    channel(c.green()),
-                    channel(c.blue())
-                )
-            })
-            .unwrap_or_else(|| "#74c0fc".to_string())
+            .or_else(|| style.lookup_color("theme_fg_color"))
+            .unwrap_or_else(|| style.color());
+        let channel = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+        format!(
+            "#{:02x}{:02x}{:02x}",
+            channel(accent.red()),
+            channel(accent.green()),
+            channel(accent.blue())
+        )
     }
 
     fn create_brave_search_result_entry(
@@ -1326,6 +1357,23 @@ impl SearchWindow {
             .css_classes(vec!["BraveSearchResultEntry"])
             .build();
 
+        main_box.append(&Self::create_brave_search_result_header(result));
+        main_box.append(&Self::create_brave_search_result_description(result));
+
+        // Make it clickable
+        let url = result.url.clone();
+        let window_clone = window.clone();
+        let gesture_click = gtk4::GestureClick::new();
+        gesture_click.connect_released(move |_, _, _, _| {
+            let _ = Self::open_url(&url, &window_clone);
+            window_clone.set_visible(false);
+        });
+        main_box.add_controller(gesture_click);
+
+        main_box.upcast()
+    }
+
+    fn create_brave_search_result_header(result: &BraveSearchResult) -> Box {
         // Header with icon and title
         let header_box = Box::builder()
             .orientation(Orientation::Horizontal)
@@ -1373,30 +1421,22 @@ impl SearchWindow {
 
         header_box.append(&icon);
         header_box.append(&content_box);
+        header_box
+    }
 
+    fn create_brave_search_result_description(result: &BraveSearchResult) -> Label {
         // Description
         let description_label = Label::builder()
-            .label(&result.description)
             .wrap(true)
             .use_markup(true)
             .xalign(0.0)
             .selectable(true)
             .build();
-
-        main_box.append(&header_box);
-        main_box.append(&description_label);
-
-        // Make it clickable
-        let url = result.url.clone();
-        let window_clone = window.clone();
-        let gesture_click = gtk4::GestureClick::new();
-        gesture_click.connect_released(move |_, _, _, _| {
-            let _ = Self::open_url(&url, &window_clone);
-            window_clone.set_visible(false);
-        });
-        main_box.add_controller(gesture_click);
-
-        main_box.upcast()
+        description_label.set_label(&brave_search::highlight_matches(
+            &result.description,
+            &Self::accent_text_color(&description_label),
+        ));
+        description_label
     }
 
     fn create_file_result_button(

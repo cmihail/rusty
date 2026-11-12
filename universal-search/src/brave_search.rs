@@ -94,8 +94,16 @@ fn decode_html_entities(text: &str) -> String {
 // Snippets come from third-party pages, so everything except <strong> must be escaped.
 fn convert_html_to_pango_markup(text: &str) -> String {
     glib::markup_escape_text(&decode_html_entities(text))
-        .replace("&lt;strong&gt;", "<span foreground=\"#ff8cc8\">")
-        .replace("&lt;/strong&gt;", "</span>")
+        .replace("&lt;strong&gt;", "<b>")
+        .replace("&lt;/strong&gt;", "</b>")
+}
+
+/// Colors the matched words of a converted snippet. The color comes from the theme at render
+/// time, so cached results follow theme changes.
+pub fn highlight_matches(description: &str, color: &str) -> String {
+    description
+        .replace("<b>", &format!("<span foreground=\"{color}\">"))
+        .replace("</b>", "</span>")
 }
 
 fn parse_brave_search_response(response_text: &str) -> Result<Vec<BraveSearchResult>, String> {

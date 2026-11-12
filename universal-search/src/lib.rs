@@ -8,4 +8,5 @@ pub mod favorites;
 pub mod files;
 pub mod gemini;
 pub mod history;
+pub mod overlay;
 pub mod recent_usage;

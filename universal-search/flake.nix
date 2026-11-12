@@ -21,6 +21,7 @@
 
         buildInputs = with pkgs; [
           gtk4
+          gtk4-layer-shell
           glib
           gdk-pixbuf
           pango
@@ -79,6 +80,7 @@
           shellHook = ''
             export RUST_SRC_PATH=${rustToolchain}/lib/rustlib/src/rust/library
             export PKG_CONFIG_PATH="${pkgs.gtk4.dev}/lib/pkgconfig:${pkgs.glib.dev}/lib/pkgconfig:$PKG_CONFIG_PATH"
+            export PKG_CONFIG_PATH="${pkgs.gtk4-layer-shell.dev}/lib/pkgconfig:$PKG_CONFIG_PATH"
           '';
 
           # Make sure GTK can find schemas

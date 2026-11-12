@@ -18,6 +18,13 @@ thread_local! {
     static HYPRLAND_INSTANCE: RefCell<Option<Hyprland>> = const { RefCell::new(None) };
 }
 
+fn request_socket_path() -> Option<String> {
+    let runtime_dir =
+        std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/run/user/1000".to_string());
+    let his = std::env::var("HYPRLAND_INSTANCE_SIGNATURE").ok()?;
+    Some(format!("{}/hypr/{}/.socket.sock", runtime_dir, his))
+}
+
 /// The `address:` argument hyprctl dispatchers expect. `Client` stores addresses with the
 /// `0x` stripped, so it has to be put back.
 pub fn address_arg(address: &str) -> String {
@@ -67,13 +74,9 @@ impl Hyprland {
     }
 
     pub fn clients(&self) -> Vec<Client> {
-        let runtime_dir =
-            std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/run/user/1000".to_string());
-        let his = match std::env::var("HYPRLAND_INSTANCE_SIGNATURE") {
-            Ok(sig) => sig,
-            Err(_) => return Vec::new(),
+        let Some(socket_path) = request_socket_path() else {
+            return Vec::new();
         };
-        let socket_path = format!("{}/hypr/{}/.socket.sock", runtime_dir, his);
 
         match imp::Hyprland::message(&socket_path, "j/clients") {
             Ok(json) => {
@@ -88,6 +91,13 @@ impl Hyprland {
             }
             Err(_) => Vec::new(),
         }
+    }
+
+    /// The pointer position in global layout coordinates.
+    pub fn cursor_position(&self) -> Option<(i32, i32)> {
+        let json = imp::Hyprland::message(&request_socket_path()?, "j/cursorpos").ok()?;
+        let cursor: CursorJson = serde_json::from_str(&json).ok()?;
+        Some((cursor.x, cursor.y))
     }
 
     /// Focus the first open window matching any of `classes`, best guess first.
@@ -180,6 +190,7 @@ pub struct Client {
     pub class: String,
     pub workspace: Workspace,
     pub monitor: i32,
+    pub pid: i32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -211,6 +222,14 @@ struct ClientJson {
     class: String,
     workspace: WorkspaceJson,
     monitor: i32,
+    #[serde(default)]
+    pid: i32,
+}
+
+#[derive(Debug, Deserialize)]
+struct CursorJson {
+    x: i32,
+    y: i32,
 }
 
 mod imp {
@@ -490,6 +509,7 @@ mod imp {
                     name: client_data.workspace.name.clone(),
                 },
                 monitor: client_data.monitor,
+                pid: client_data.pid,
             }
         }
 
