@@ -1,17 +1,19 @@
 use glib::clone;
-use gtk4::gdk::{Display, Monitor};
+use gtk4::gdk::{ContentProvider, Display, DragAction, Monitor};
 use gtk4::prelude::*;
 use gtk4::{Align, DrawingArea, Orientation, Overlay, Separator, Widget};
 use gtk4::{ApplicationWindow, Box, Button, EventControllerMotion, GestureClick, IconTheme};
-use gtk4::{Image, Label};
+use gtk4::{DragSource, DropTarget, Image, Label, Popover, PositionType, WidgetPaintable};
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
+use std::ffi::OsStr;
 use std::path::Path;
 use std::process::Command;
 use std::rc::Rc;
 use std::time::Duration;
 
+use crate::config::{moved_pin, toggled_pin, Config};
 use crate::service::desktop_entry;
 use crate::service::hyprland::{address_arg, Client, Hyprland, Workspace};
 use crate::service::network::{Network, NetworkState};
@@ -21,6 +23,7 @@ pub const MINIMIZED_WORKSPACE: &str = "special:minimized";
 
 const TRIGGER_LENGTH: i32 = 400;
 const HIDE_DELAY: Duration = Duration::from_millis(300);
+const POPOVER_DELAY: Duration = Duration::from_millis(400);
 // Longer than HIDE_DELAY because the pointer only "enters" the dock once it moves again.
 const SHOW_GRACE: Duration = Duration::from_millis(1500);
 const ICON_SIZE: i32 = 32;
@@ -64,6 +67,36 @@ pub fn dock_entries(clients: Vec<Client>) -> Vec<DockEntry> {
         )
     });
     entries
+}
+
+/// A pinned app: its first window in dock order, or its desktop id while it has none.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PinnedSlot {
+    Running(DockEntry),
+    Idle(String),
+}
+
+/// Splits the dock entries into the pinned slots, in pin order, and the other windows. A pin
+/// takes only the first window of its app, the rest stay with the other windows.
+pub fn pin_entries(
+    entries: Vec<DockEntry>,
+    pinned: &[String],
+    app_id: impl Fn(&Client) -> Option<String>,
+) -> (Vec<PinnedSlot>, Vec<DockEntry>) {
+    let ids: Vec<Option<String>> = entries.iter().map(|entry| app_id(&entry.client)).collect();
+    let mut remaining: Vec<Option<DockEntry>> = entries.into_iter().map(Some).collect();
+    let mut seen = HashSet::new();
+    let slots = pinned
+        .iter()
+        .filter(|pin| seen.insert(pin.as_str()))
+        .map(|pin| {
+            ids.iter()
+                .position(|id| id.as_deref() == Some(pin.as_str()))
+                .and_then(|index| remaining[index].take())
+                .map_or_else(|| PinnedSlot::Idle(pin.clone()), PinnedSlot::Running)
+        })
+        .collect();
+    (slots, remaining.into_iter().flatten().collect())
 }
 
 /// Whether `cursor` is in the right-center area covered by the dock and its hover strip.
@@ -191,6 +224,11 @@ struct DockState {
     connector: String,
     hide_generation: Cell<u64>,
     urgent: RefCell<HashSet<String>>,
+    popover: RefCell<Option<Popover>>,
+    popover_generation: Cell<u64>,
+    rebuild_pending: Cell<bool>,
+    dragging: Cell<bool>,
+    pinned_end: RefCell<Option<Widget>>,
 }
 
 pub struct Dock {
@@ -227,6 +265,11 @@ impl Dock {
             connector,
             hide_generation: Cell::new(0),
             urgent: RefCell::new(HashSet::new()),
+            popover: RefCell::new(None),
+            popover_generation: Cell::new(0),
+            rebuild_pending: Cell::new(false),
+            dragging: Cell::new(false),
+            pinned_end: RefCell::new(None),
         });
 
         let trigger = Self::create_trigger(app, monitor, &state);
@@ -235,6 +278,8 @@ impl Dock {
         Self::connect_hyprland_events(&state);
         Self::connect_notifications(&state);
         Self::connect_network(&state);
+        Self::connect_config(&state);
+        connect_unpin_drop(&state);
 
         Self {
             _trigger: trigger,
@@ -291,9 +336,28 @@ impl Dock {
         motion.connect_enter(clone!(
             #[weak]
             state,
-            move |_, _, _| show(&state)
+            move |_, x, y| {
+                log::debug!("dock: trigger enter at ({:.1}, {:.1})", x, y);
+                show(&state)
+            }
         ));
+        // The trigger is unmapped with the pointer still on it, so GTK misses the leave and
+        // reports no enter on the next visit. Motion still arrives.
+        motion.connect_motion(clone!(
+            #[weak]
+            state,
+            move |_, x, y| {
+                log::debug!("dock: trigger motion ({:.1}, {:.1})", x, y);
+                if !state.window.is_visible() {
+                    show(&state);
+                }
+            }
+        ));
+        motion.connect_leave(|_| log::debug!("dock: trigger leave"));
         trigger.add_controller(motion);
+        trigger.connect_map(|_| log::debug!("dock: trigger mapped"));
+        trigger.connect_unmap(|_| log::debug!("dock: trigger unmapped"));
+        debug_watch_edge(state);
         WidgetExt::realize(&trigger);
         trigger.set_visible(true);
         trigger
@@ -304,12 +368,18 @@ impl Dock {
         motion.connect_enter(clone!(
             #[weak]
             state,
-            move |_, _, _| cancel_hide(&state)
+            move |_, _, _| {
+                log::debug!("dock: dock enter");
+                cancel_hide(&state)
+            }
         ));
         motion.connect_leave(clone!(
             #[weak]
             state,
-            move |_| schedule_hide(&state, HIDE_DELAY)
+            move |_| {
+                log::debug!("dock: dock leave");
+                schedule_hide(&state, HIDE_DELAY)
+            }
         ));
         state.window.add_controller(motion);
     }
@@ -341,6 +411,15 @@ impl Dock {
         Network::instance().connect_notify_local(Some("state"), move |_, _| {
             if let Some(state) = weak.upgrade() {
                 update_handle(&state);
+            }
+        });
+    }
+
+    fn connect_config(state: &Rc<DockState>) {
+        let weak = Rc::downgrade(state);
+        Config::instance().connect_notify_local(Some("dock-pinned"), move |_, _| {
+            if let Some(state) = weak.upgrade() {
+                rebuild(&state);
             }
         });
     }
@@ -416,14 +495,17 @@ fn draw_handle(area: &DrawingArea, cr: &gtk4::cairo::Context, width: i32, height
 }
 
 fn show(state: &Rc<DockState>) {
+    log::debug!("dock: show, cursor {:?}", debug_cursor());
     rebuild(state);
     state.window.present();
     set_trigger_visible(state, false);
     schedule_hide(state, SHOW_GRACE);
 }
 
-fn hide(state: &DockState) {
+fn hide(state: &Rc<DockState>) {
+    log::debug!("dock: hide, cursor {:?}", debug_cursor());
     cancel_hide(state);
+    dismiss_popover(state);
     state.window.set_visible(false);
     set_trigger_visible(state, true);
 }
@@ -450,14 +532,57 @@ fn schedule_hide(state: &Rc<DockState>, delay: Duration) {
         let Some(state) = weak.upgrade() else {
             return;
         };
-        if state.hide_generation.get() != generation || state.held.get() {
+        let busy = state.held.get() || state.popover.borrow().is_some() || state.dragging.get();
+        if state.hide_generation.get() != generation || busy {
+            log::debug!("dock: hide skipped, stale or busy (busy={})", busy);
             return;
         }
         if pointer_in_dock_area(&state) {
+            log::debug!(
+                "dock: hide deferred, cursor {:?} in dock area",
+                debug_cursor()
+            );
             schedule_hide(&state, HIDE_DELAY);
         } else {
             hide(&state);
         }
+    });
+}
+
+fn debug_cursor() -> Option<(i32, i32)> {
+    Hyprland::instance().and_then(|hyprland| hyprland.cursor_position())
+}
+
+/// Debug only: logs when the cursor rests on the handle strip while the dock stays hidden.
+fn debug_watch_edge(state: &Rc<DockState>) {
+    if !log::log_enabled!(log::Level::Debug) {
+        return;
+    }
+    let weak = Rc::downgrade(state);
+    let reported = Cell::new(false);
+    glib::timeout_add_local(Duration::from_millis(50), move || {
+        let Some(state) = weak.upgrade() else {
+            return glib::ControlFlow::Break;
+        };
+        let geometry = state.monitor.geometry();
+        let on_strip = debug_cursor().filter(|&(x, y)| {
+            let right = geometry.x() + geometry.width();
+            let top = geometry.y() + (geometry.height() - state.handle.height()) / 2;
+            x >= right - HANDLE_THICKNESS
+                && x < right
+                && (top..top + state.handle.height()).contains(&y)
+        });
+        let missed = on_strip.is_some() && !state.window.is_visible();
+        if missed && !reported.replace(true) {
+            log::debug!(
+                "dock: MISSED cursor {:?} on strip, dock hidden, trigger mapped={}",
+                on_strip,
+                state.handle.is_mapped()
+            );
+        } else if !missed {
+            reported.set(false);
+        }
+        glib::ControlFlow::Continue
     });
 }
 
@@ -476,8 +601,55 @@ fn pointer_in_dock_area(state: &DockState) -> bool {
     in_dock_area(cursor, monitor, dock_size)
 }
 
-/// The status widget stays in place so the control center open on it is not closed.
+/// The status widget stays in place so the control center open on it is not closed. An open
+/// popover's item has to stay too, so the rebuild waits for the popover to close. A dragged
+/// item has to stay until the drag ends.
 fn rebuild(state: &Rc<DockState>) {
+    if state.popover.borrow().is_some() || state.dragging.get() {
+        state.rebuild_pending.set(true);
+        return;
+    }
+    clear_items(state);
+
+    let clients = Hyprland::instance()
+        .map(|hyprland| hyprland.clients())
+        .unwrap_or_default();
+    let pinned = Config::instance().dock_pinned();
+    let (slots, windows) = pin_entries(dock_entries(clients), &pinned, |client| {
+        client_app(client).map(|(id, _)| id)
+    });
+    let notified_classes = notification_classes();
+
+    state.items.append(&launcher_button(state));
+    append_pinned(state, slots, &notified_classes);
+    append_windows(state, windows, &notified_classes);
+    place_status(state);
+}
+
+fn append_pinned(state: &Rc<DockState>, slots: Vec<PinnedSlot>, notified_classes: &[String]) {
+    if !slots.is_empty() {
+        state.items.append(&Separator::new(Orientation::Horizontal));
+    }
+    let mut last = None;
+    for slot in slots {
+        let (item, id) = match slot {
+            PinnedSlot::Running(entry) => {
+                let id = client_app(&entry.client).map(|(id, _)| id);
+                let notified = is_notified(&entry.client.class, notified_classes);
+                (item_button(state, entry, notified), id)
+            }
+            PinnedSlot::Idle(id) => (idle_button(state, id.clone()), Some(id)),
+        };
+        if let Some(id) = id {
+            connect_pin_drag(state, &item, &id);
+        }
+        state.items.append(&item);
+        last = Some(item);
+    }
+    state.pinned_end.replace(last);
+}
+
+fn clear_items(state: &DockState) {
     let mut child = state.items.first_child();
     while let Some(widget) = child {
         child = widget.next_sibling();
@@ -485,28 +657,21 @@ fn rebuild(state: &Rc<DockState>) {
             state.items.remove(&widget);
         }
     }
+}
 
-    let clients = Hyprland::instance()
-        .map(|hyprland| hyprland.clients())
-        .unwrap_or_default();
-
-    state.items.append(&launcher_button(state));
-    if !clients.is_empty() {
-        state.items.append(&Separator::new(Orientation::Horizontal));
-    }
-
-    let notified_classes = notification_classes();
-
+fn append_windows(state: &Rc<DockState>, windows: Vec<DockEntry>, notified_classes: &[String]) {
     let mut previous_minimized = false;
-    for (index, entry) in dock_entries(clients).into_iter().enumerate() {
-        if entry.minimized && !previous_minimized && index > 0 {
+    for (index, entry) in windows.into_iter().enumerate() {
+        if index == 0 || (entry.minimized && !previous_minimized) {
             state.items.append(&Separator::new(Orientation::Horizontal));
         }
         previous_minimized = entry.minimized;
-        let notified = is_notified(&entry.client.class, &notified_classes);
+        let notified = is_notified(&entry.client.class, notified_classes);
         state.items.append(&item_button(state, entry, notified));
     }
+}
 
+fn place_status(state: &DockState) {
     let last = state.items.last_child();
     if state.status.parent().is_none() {
         state.items.append(&state.status_separator);
@@ -554,18 +719,29 @@ fn launcher_button(state: &Rc<DockState>) -> Button {
     button
 }
 
-/// Runs in its own scope so the launcher outlives a rusty-de restart.
 fn launch() {
     let Some(home) = std::env::var_os("HOME") else {
         return;
     };
-    let launcher = Path::new(&home).join(LAUNCHER);
+    run_in_scope(Path::new(&home).join(LAUNCHER).as_os_str(), &[]);
+}
+
+fn launch_app(id: &str) {
+    run_in_scope(OsStr::new("gtk-launch"), &["--", id]);
+}
+
+/// Runs in its own scope so what it starts outlives a rusty-de restart.
+fn run_in_scope(program: &OsStr, args: &[&str]) {
     let spawned = Command::new("systemd-run")
         .args(["--user", "--scope", "--"])
-        .arg(&launcher)
+        .arg(program)
+        .args(args)
         .spawn();
-    if let Err(e) = spawned {
-        log::warn!("dock: failed to start {}: {}", launcher.display(), e);
+    match spawned {
+        Ok(mut child) => {
+            std::thread::spawn(move || child.wait());
+        }
+        Err(e) => log::warn!("dock: failed to start {}: {}", program.to_string_lossy(), e),
     }
 }
 
@@ -600,20 +776,15 @@ fn item_button(state: &Rc<DockState>, entry: DockEntry, notified: bool) -> Widge
     button.add_css_class("DockItem");
     let badge = workspace_badge(&client.workspace);
     button.set_child(Some(&icon_with_badge(icon_image(client), badge, notified)));
-
-    let workspace = if entry.minimized {
-        "minimized"
-    } else {
-        client.workspace.name.as_str()
-    };
-    button.set_tooltip_text(Some(&format!(
-        "{}\n{} · {}",
-        client.title, client.class, workspace
-    )));
     if entry.minimized {
         button.add_css_class("minimized");
     }
 
+    let details = window_details(client);
+    let menu_entry = entry.clone();
+    connect_popover(state, &button, details, move |state| {
+        window_menu(state, &menu_entry, notified)
+    });
     button.connect_clicked(clone!(
         #[weak]
         state,
@@ -624,14 +795,465 @@ fn item_button(state: &Rc<DockState>, entry: DockEntry, notified: bool) -> Widge
         }
     ));
     if notified {
-        let right_click = GestureClick::builder().button(3).build();
-        right_click.connect_pressed(move |gesture, _, _, _| {
-            gesture.set_state(gtk4::EventSequenceState::Claimed);
-            dismiss_notifications_of(&class);
-        });
-        button.add_controller(right_click);
+        let dismiss = move || dismiss_notifications_of(&class);
+        button.add_controller(click_controller(state, 2, dismiss));
     }
     button.upcast()
+}
+
+/// A pinned app with no window, launched on click.
+fn idle_button(state: &Rc<DockState>, id: String) -> Widget {
+    let app = desktop_entry::lookup(&id);
+    let name = app.as_ref().and_then(|app| app.name.clone());
+    let icon = app_icon(app.and_then(|app| app.icon), &[&id]);
+    let button = Button::new();
+    button.add_css_class("DockItem");
+    button.add_css_class("idle");
+    button.set_child(Some(&icon_with_badge(icon, None, false)));
+
+    let details = (
+        name.unwrap_or_else(|| id.clone()),
+        "Not running".to_string(),
+    );
+    let menu_id = id.clone();
+    connect_popover(state, &button, details, move |state| {
+        idle_menu(state, &menu_id)
+    });
+    button.connect_clicked(clone!(
+        #[weak]
+        state,
+        move |_| {
+            hide(&state);
+            launch_app(&id);
+        }
+    ));
+    button.upcast()
+}
+
+/// The app's name over the window title, or the class when the app has no desktop entry.
+fn window_details(client: &Client) -> (String, String) {
+    let name = client_app(client)
+        .and_then(|(_, app)| app.name)
+        .unwrap_or_else(|| client.class.clone());
+    (name, client.title.clone())
+}
+
+fn details_view((name, detail): &(String, String)) -> Widget {
+    let view = Box::new(Orientation::Vertical, 2);
+    let title = Label::new(Some(name));
+    title.add_css_class("DockDetailsName");
+    let subtitle = Label::new(Some(detail));
+    subtitle.add_css_class("dim-label");
+    subtitle.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+    subtitle.set_max_width_chars(40);
+    for label in [&title, &subtitle] {
+        label.set_halign(Align::Start);
+        view.append(label);
+    }
+    view.upcast()
+}
+
+fn window_menu(state: &Rc<DockState>, entry: &DockEntry, notified: bool) -> Widget {
+    let client = &entry.client;
+    let mut actions = Vec::new();
+    if let Some((id, _)) = client_app(client) {
+        actions.push(pin_action(state, &id));
+    }
+    let address = client.address.clone();
+    actions.push(menu_action(
+        state,
+        ("window-close-symbolic", "Close window"),
+        false,
+        move || close_window(&address),
+    ));
+    if notified {
+        let class = client.class.clone();
+        actions.push(menu_action(
+            state,
+            ("edit-clear-all-symbolic", "Dismiss notifications"),
+            false,
+            move || dismiss_notifications_of(&class),
+        ));
+    }
+    menu(&actions)
+}
+
+fn idle_menu(state: &Rc<DockState>, id: &str) -> Widget {
+    let launch_id = id.to_string();
+    let launch = menu_action(
+        state,
+        ("media-playback-start-symbolic", "Launch"),
+        true,
+        move || launch_app(&launch_id),
+    );
+    menu(&[launch, pin_action(state, id)])
+}
+
+/// A filled, accented pin while the app is pinned, an outlined one otherwise.
+fn pin_action(state: &Rc<DockState>, id: &str) -> Button {
+    let pinned = Config::instance().dock_pinned().iter().any(|pin| pin == id);
+    let tooltip = if pinned {
+        "Unpin from dock"
+    } else {
+        "Pin to dock"
+    };
+    let id = id.to_string();
+    let icon = if pinned {
+        "dock-pinned-symbolic"
+    } else {
+        "dock-unpinned-symbolic"
+    };
+    let button = menu_action(state, (icon, tooltip), false, move || toggle_pin(&id));
+    if pinned {
+        button.add_css_class("pinned");
+    }
+    button
+}
+
+fn toggle_pin(id: &str) {
+    save_pins(toggled_pin(Config::instance().dock_pinned(), id));
+}
+
+fn save_pins(pinned: Vec<String>) {
+    if let Err(e) = Config::instance().set_dock_pinned(pinned) {
+        log::warn!("dock: failed to save the pinned apps: {}", e);
+    }
+}
+
+/// A pinned item is dropped on another pinned item to move next to it, or below the pinned
+/// section to unpin.
+fn connect_pin_drag(state: &Rc<DockState>, item: &Widget, id: &str) {
+    item.add_controller(pin_drag_source(state, item, id));
+    item.add_controller(pin_drop_target(id));
+}
+
+fn pin_drag_source(state: &Rc<DockState>, item: &Widget, id: &str) -> DragSource {
+    let source = DragSource::builder().actions(DragAction::MOVE).build();
+    source.set_content(Some(&ContentProvider::for_value(&id.to_value())));
+    let paintable = WidgetPaintable::new(Some(item));
+    source.connect_drag_begin(clone!(
+        #[weak]
+        state,
+        #[weak]
+        item,
+        move |source, _| {
+            state.dragging.set(true);
+            dismiss_popover(&state);
+            cancel_hide(&state);
+            source.set_icon(Some(&paintable), item.width() / 2, item.height() / 2);
+        }
+    ));
+    source.connect_drag_end(clone!(
+        #[weak]
+        state,
+        move |_, _, _| {
+            state.dragging.set(false);
+            if state.rebuild_pending.replace(false) {
+                rebuild(&state);
+            }
+            schedule_hide(&state, HIDE_DELAY);
+        }
+    ));
+    source
+}
+
+fn pin_drop_target(id: &str) -> DropTarget {
+    let target = DropTarget::new(glib::Type::STRING, DragAction::MOVE);
+    target.connect_motion(|target, _, y| {
+        mark_drop_side(target, Some(drops_after(target, y)));
+        DragAction::MOVE
+    });
+    target.connect_leave(|target| mark_drop_side(target, None));
+    let id = id.to_string();
+    target.connect_drop(move |target, value, _, y| {
+        mark_drop_side(target, None);
+        let Ok(dragged) = value.get::<String>() else {
+            return false;
+        };
+        let after = drops_after(target, y);
+        save_pins(moved_pin(
+            Config::instance().dock_pinned(),
+            &dragged,
+            &id,
+            after,
+        ));
+        true
+    });
+    target
+}
+
+fn drops_after(target: &DropTarget, y: f64) -> bool {
+    target
+        .widget()
+        .is_some_and(|item| y > f64::from(item.height()) / 2.0)
+}
+
+fn mark_drop_side(target: &DropTarget, after: Option<bool>) {
+    let Some(item) = target.widget() else {
+        return;
+    };
+    item.remove_css_class("drop-before");
+    item.remove_css_class("drop-after");
+    match after {
+        Some(true) => item.add_css_class("drop-after"),
+        Some(false) => item.add_css_class("drop-before"),
+        None => {}
+    }
+}
+
+/// Drops the pinned items' own targets do not take land here, and unpin below the pinned
+/// section.
+fn connect_unpin_drop(state: &Rc<DockState>) {
+    let target = DropTarget::new(glib::Type::STRING, DragAction::MOVE);
+    let weak = Rc::downgrade(state);
+    target.connect_drop(move |_, value, _, y| {
+        let (Some(state), Ok(id)) = (weak.upgrade(), value.get::<String>()) else {
+            return false;
+        };
+        if !below_pinned(&state, y) {
+            return false;
+        }
+        let mut pinned = Config::instance().dock_pinned();
+        pinned.retain(|pin| *pin != id);
+        save_pins(pinned);
+        true
+    });
+    state.items.add_controller(target);
+}
+
+fn below_pinned(state: &DockState, y: f64) -> bool {
+    let last = state.pinned_end.borrow();
+    let Some(bounds) = last
+        .as_ref()
+        .and_then(|last| last.compute_bounds(&state.items))
+    else {
+        return false;
+    };
+    y > f64::from(bounds.y() + bounds.height())
+}
+
+fn menu(actions: &[Button]) -> Widget {
+    let menu = Box::new(Orientation::Vertical, 8);
+    for action in actions {
+        menu.append(action);
+    }
+    menu.upcast()
+}
+
+/// Actions that start an app hide the dock like the launcher does.
+fn menu_action(
+    state: &Rc<DockState>,
+    (icon, tooltip): (&str, &str),
+    hides: bool,
+    action: impl Fn() + 'static,
+) -> Button {
+    let button = Button::from_icon_name(icon);
+    button.add_css_class("flat");
+    button.add_css_class("circular");
+    button.set_tooltip_text(Some(tooltip));
+    let action = Rc::new(action);
+    let weak = Rc::downgrade(state);
+    // Deferred because closing the popover destroys this button.
+    button.connect_clicked(move |_| {
+        let (weak, action) = (weak.clone(), action.clone());
+        glib::idle_add_local_once(move || {
+            let Some(state) = weak.upgrade() else {
+                return;
+            };
+            close_popover(&state);
+            action();
+            if hides {
+                hide(&state);
+            }
+        });
+    });
+    button
+}
+
+/// Opens `menu` beside `button` once the pointer rests on it, or at once while another
+/// item's popover is open. The popover is a child of `button`, so its events reach it too.
+/// Hovering shows the app's details, a right click its actions.
+fn connect_popover(
+    state: &Rc<DockState>,
+    button: &Button,
+    details: (String, String),
+    menu: impl Fn(&Rc<DockState>) -> Widget + 'static,
+) {
+    connect_details(state, button, details);
+    let right_click = GestureClick::builder().button(3).build();
+    let weak = Rc::downgrade(state);
+    let target = button.downgrade();
+    right_click.connect_pressed(move |gesture, _, _, _| {
+        gesture.set_state(gtk4::EventSequenceState::Claimed);
+        if let (Some(state), Some(button)) = (weak.upgrade(), target.upgrade()) {
+            cancel_popover_timer(&state);
+            open_popover(&state, &button, menu(&state), true);
+        }
+    });
+    button.add_controller(right_click);
+}
+
+fn connect_details(state: &Rc<DockState>, button: &Button, details: (String, String)) {
+    let motion = EventControllerMotion::new();
+    let weak = Rc::downgrade(state);
+    let target = button.downgrade();
+    motion.connect_enter(move |_, _, _| {
+        let (Some(state), Some(button)) = (weak.upgrade(), target.upgrade()) else {
+            return;
+        };
+        if owns_popover(&state, &button) {
+            return cancel_popover_timer(&state);
+        }
+        let delay = if state.popover.borrow().is_some() {
+            Duration::ZERO
+        } else {
+            POPOVER_DELAY
+        };
+        let view = details_view(&details);
+        schedule_popover(&state, delay, move |state| {
+            open_popover(state, &button, view, false)
+        });
+    });
+    motion.connect_motion(clone!(
+        #[weak]
+        state,
+        #[weak]
+        button,
+        move |_, _, _| {
+            if owns_popover(&state, &button) {
+                cancel_popover_timer(&state);
+            }
+        }
+    ));
+    motion.connect_leave(clone!(
+        #[weak]
+        state,
+        move |_| schedule_popover(&state, HIDE_DELAY, close_popover)
+    ));
+    button.add_controller(motion);
+}
+
+fn owns_popover(state: &DockState, button: &Button) -> bool {
+    state
+        .popover
+        .borrow()
+        .as_ref()
+        .and_then(|popover| popover.parent())
+        .is_some_and(|parent| parent == *button.upcast_ref::<Widget>())
+}
+
+/// Without autohide the popover takes no grab, which a dock without keyboard focus needs.
+/// Details are not targetable, so the pointer moving onto them closes them like leaving.
+fn open_popover(state: &Rc<DockState>, button: &Button, content: Widget, interactive: bool) {
+    take_popover(state);
+    if button.root().is_none() || state.dragging.get() {
+        return;
+    }
+    let popover = Popover::builder()
+        .child(&content)
+        .can_target(interactive)
+        .autohide(false)
+        .has_arrow(true)
+        .position(PositionType::Left)
+        .build();
+    popover.add_css_class("DockMenu");
+
+    let motion = EventControllerMotion::new();
+    motion.connect_enter(clone!(
+        #[weak]
+        state,
+        move |_, _, _| cancel_popover_timer(&state)
+    ));
+    motion.connect_leave(clone!(
+        #[weak]
+        state,
+        move |_| schedule_popover(&state, HIDE_DELAY, close_popover)
+    ));
+    popover.add_controller(motion);
+    popover.set_parent(button);
+    popover.popup();
+    state.popover.replace(Some(popover));
+    cancel_hide(state);
+}
+
+fn schedule_popover(
+    state: &Rc<DockState>,
+    delay: Duration,
+    action: impl FnOnce(&Rc<DockState>) + 'static,
+) {
+    cancel_popover_timer(state);
+    let generation = state.popover_generation.get();
+    let weak = Rc::downgrade(state);
+    glib::timeout_add_local_once(delay, move || {
+        let Some(state) = weak.upgrade() else {
+            return;
+        };
+        if state.popover_generation.get() == generation {
+            action(&state);
+        }
+    });
+}
+
+fn cancel_popover_timer(state: &DockState) {
+    state
+        .popover_generation
+        .set(state.popover_generation.get() + 1);
+}
+
+/// Closes the popover and lets the dock hide once the pointer is away from it.
+fn close_popover(state: &Rc<DockState>) {
+    if dismiss_popover(state) {
+        schedule_hide(state, HIDE_DELAY);
+    }
+}
+
+/// Closes the popover and runs the rebuild it held back. Returns whether one was open.
+fn dismiss_popover(state: &Rc<DockState>) -> bool {
+    cancel_popover_timer(state);
+    let open = take_popover(state);
+    if state.rebuild_pending.replace(false) {
+        rebuild(state);
+    }
+    open
+}
+
+fn take_popover(state: &DockState) -> bool {
+    let Some(popover) = state.popover.take() else {
+        return false;
+    };
+    popover.popdown();
+    popover.unparent();
+    true
+}
+
+fn click_controller(
+    state: &Rc<DockState>,
+    button: u32,
+    action: impl Fn() + 'static,
+) -> GestureClick {
+    let click = GestureClick::builder().button(button).build();
+    let weak = Rc::downgrade(state);
+    click.connect_pressed(move |gesture, _, _, _| {
+        gesture.set_state(gtk4::EventSequenceState::Claimed);
+        if let Some(state) = weak.upgrade() {
+            dismiss_popover(&state);
+        }
+        action();
+    });
+    click
+}
+
+fn close_window(address: &str) {
+    let Some(hyprland) = Hyprland::instance() else {
+        return;
+    };
+    let window = address_arg(address);
+    if let Err(e) = hyprland.dispatch(
+        &format!("hl.dsp.window.close({{ window = '{}' }})", window),
+        &format!("closewindow {}", window),
+    ) {
+        log::warn!("dock: failed to close {}: {}", window, e);
+    }
 }
 
 /// The program a process runs. A binary replaced by an upgrade reads as "name (deleted)".
@@ -646,22 +1268,22 @@ fn process_program(pid: i32) -> Option<String> {
 
 fn icon_image(client: &Client) -> Image {
     let class = client.class.as_str();
+    let lower = class.to_lowercase();
+    let entry_icon = client_app(client).and_then(|(_, entry)| entry.icon);
+    app_icon(entry_icon, &[class, lower.as_str()])
+}
+
+/// The desktop entry's icon, else the first of `fallbacks` the theme has.
+fn app_icon(entry_icon: Option<String>, fallbacks: &[&str]) -> Image {
     let theme = Display::default().map(|display| IconTheme::for_display(&display));
     let has_icon = |name: &str| theme.as_ref().is_some_and(|theme| theme.has_icon(name));
-    let entry_icon = desktop_entry::lookup_by_window_class(class)
-        .or_else(|| {
-            process_program(client.pid)
-                .and_then(|program| desktop_entry::lookup_by_executable(&program))
-        })
-        .and_then(|entry| entry.icon);
-
     let image = match entry_icon {
         Some(path) if path.starts_with('/') => Image::from_file(path),
         Some(name) if has_icon(&name) => Image::from_icon_name(&name),
         _ => {
-            let lower = class.to_lowercase();
-            let name = [class, lower.as_str()]
-                .into_iter()
+            let name = fallbacks
+                .iter()
+                .copied()
                 .find(|name| !name.is_empty() && has_icon(name))
                 .unwrap_or(FALLBACK_ICON);
             Image::from_icon_name(name)
@@ -669,6 +1291,14 @@ fn icon_image(client: &Client) -> Image {
     };
     image.set_pixel_size(ICON_SIZE);
     image
+}
+
+/// The app a window belongs to, by its class or else by the program it runs.
+fn client_app(client: &Client) -> Option<desktop_entry::Resolved> {
+    desktop_entry::lookup_by_window_class(&client.class).or_else(|| {
+        process_program(client.pid)
+            .and_then(|program| desktop_entry::lookup_by_executable(&program))
+    })
 }
 
 /// Minimized windows move to this monitor's active workspace first. Focusing a window

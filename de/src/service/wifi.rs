@@ -36,6 +36,11 @@ impl Wifi {
         self.imp().strength.get()
     }
 
+    /// The active access point's frequency in MHz, or 0 when not connected.
+    pub fn frequency(&self) -> u32 {
+        self.imp().frequency.get()
+    }
+
     pub fn state(&self) -> WifiState {
         WifiState::from_u32(self.imp().state.get())
     }
@@ -178,6 +183,7 @@ mod imp {
         pub connected: Cell<bool>,
         pub ssid: RefCell<String>,
         pub strength: Cell<u8>,
+        pub frequency: Cell<u32>,
         pub state: Cell<u32>,
         pub scanning: Cell<bool>,
         pub access_points: RefCell<Vec<super::AccessPoint>>,
@@ -190,6 +196,7 @@ mod imp {
                 connected: Cell::new(false),
                 ssid: RefCell::new(String::new()),
                 strength: Cell::new(0),
+                frequency: Cell::new(0),
                 state: Cell::new(0),
                 scanning: Cell::new(false),
                 access_points: RefCell::new(Vec::new()),
@@ -394,6 +401,9 @@ mod imp {
                     glib::ParamSpecUChar::builder("strength")
                         .read_only()
                         .build(),
+                    glib::ParamSpecUInt::builder("frequency")
+                        .read_only()
+                        .build(),
                     glib::ParamSpecUInt::builder("state").read_only().build(),
                     glib::ParamSpecBoolean::builder("scanning")
                         .read_only()
@@ -416,6 +426,7 @@ mod imp {
                 "connected" => self.connected.get().to_value(),
                 "ssid" => self.ssid.borrow().to_value(),
                 "strength" => self.strength.get().to_value(),
+                "frequency" => self.frequency.get().to_value(),
                 "state" => self.state.get().to_value(),
                 "scanning" => self.scanning.get().to_value(),
                 "access-points" => {
@@ -604,6 +615,9 @@ mod imp {
                 // Strength changes can also affect icon
                 obj.notify("icon-name");
             }
+            if changes.frequency_changed {
+                obj.notify("frequency");
+            }
             if changes.state_changed {
                 obj.notify("state");
                 obj.notify("icon-name");
@@ -672,7 +686,7 @@ mod imp {
         async fn get_wifi_connection_info(
             device_path: zbus::zvariant::OwnedObjectPath,
             connection: &Connection,
-        ) -> Option<(String, u8)> {
+        ) -> Option<(String, u8, u32)> {
             let wireless_proxy = match WirelessDeviceProxy::builder(connection).path(device_path) {
                 Ok(builder) => match builder.build().await {
                     Ok(p) => p,
@@ -705,15 +719,15 @@ mod imp {
 
             let ssid = String::from_utf8_lossy(&ssid_bytes).to_string();
             let signal_strength = ap_proxy.strength().await.unwrap_or_default();
+            let frequency = ap_proxy.frequency().await.unwrap_or_default();
 
-            Some((ssid, signal_strength))
+            Some((ssid, signal_strength, frequency))
         }
 
         fn apply_wifi_state_changes(
             &self,
             device_state: u32,
-            ssid: String,
-            signal_strength: u8,
+            (ssid, signal_strength, frequency): (String, u8, u32),
             changes: &mut WifiChanges,
         ) {
             let old_state = self.state.get();
@@ -732,6 +746,11 @@ mod imp {
             if signal_strength != old_strength {
                 self.strength.set(signal_strength);
                 changes.strength_changed = true;
+            }
+
+            if frequency != self.frequency.get() {
+                self.frequency.set(frequency);
+                changes.frequency_changed = true;
             }
 
             let old_connected = self.connected.get();
@@ -766,6 +785,11 @@ mod imp {
                 self.strength.set(0);
                 changes.strength_changed = true;
             }
+
+            if self.frequency.get() != 0 {
+                self.frequency.set(0);
+                changes.frequency_changed = true;
+            }
         }
 
         fn update_wifi_state(&self) -> WifiChanges {
@@ -795,15 +819,10 @@ mod imp {
                 if let Some((device_path, device_state, _, _)) =
                     Self::find_active_wifi_device(devices, &connection).await
                 {
-                    if let Some((ssid, signal_strength)) =
+                    if let Some(info) =
                         Self::get_wifi_connection_info(device_path, &connection).await
                     {
-                        self.apply_wifi_state_changes(
-                            device_state,
-                            ssid,
-                            signal_strength,
-                            &mut changes,
-                        );
+                        self.apply_wifi_state_changes(device_state, info, &mut changes);
                     }
                 } else {
                     self.handle_no_active_connection(&mut changes);
@@ -2071,6 +2090,7 @@ mod imp {
         connected_changed: bool,
         ssid_changed: bool,
         strength_changed: bool,
+        frequency_changed: bool,
         state_changed: bool,
     }
 }

@@ -52,7 +52,13 @@ fn main() {
             icon_theme.add_resource_path("/com/rusty-de/icons");
         }
 
-        setup_style();
+        let provider = gtk4::CssProvider::new();
+        provider.load_from_data(include_str!("style.css"));
+        gtk4::style_context_add_provider_for_display(
+            &Display::default().expect("Could not get default display"),
+            &provider,
+            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
 
         if let Some(_hyprland) = service::hyprland::Hyprland::instance() {
             // Hyprland service initialized successfully
@@ -489,30 +495,4 @@ fn setup_dbus_server(bars: std::rc::Rc<std::cell::RefCell<Vec<window::bar::Bar>>
             std::future::pending::<()>().await;
         });
     });
-}
-
-fn setup_style() {
-    // Automatic rendering leaves text on fractional pixels, which blurs the small bar digits.
-    if let Some(settings) = gtk4::Settings::default() {
-        set_manual_font_rendering(&settings);
-    }
-
-    let provider = gtk4::CssProvider::new();
-    provider.load_from_data(include_str!("style.css"));
-    gtk4::style_context_add_provider_for_display(
-        &Display::default().expect("Could not get default display"),
-        &provider,
-        gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
-    );
-}
-
-/// GTK 4.16 added this setting, newer than the GTK version the bindings target.
-fn set_manual_font_rendering(settings: &gtk4::Settings) {
-    let manual = settings
-        .find_property("gtk-font-rendering")
-        .and_then(|spec| glib::EnumClass::with_type(spec.value_type()))
-        .and_then(|class| class.to_value_by_nick("manual"));
-    if let Some(manual) = manual {
-        settings.set_property_from_value("gtk-font-rendering", &manual);
-    }
 }

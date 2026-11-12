@@ -1,3 +1,81 @@
+use rusty_de::config::{moved_pin, toggled_pin, with_dock_pinned};
+
+fn pins(ids: &[&str]) -> Vec<String> {
+    ids.iter().map(|id| id.to_string()).collect()
+}
+
+#[test]
+fn test_moved_pin_places_before_or_after_the_target() {
+    let pinned = pins(&["a", "b", "c", "d"]);
+
+    assert_eq!(
+        moved_pin(pinned.clone(), "d", "b", false),
+        pins(&["a", "d", "b", "c"])
+    );
+    assert_eq!(
+        moved_pin(pinned.clone(), "a", "c", true),
+        pins(&["b", "c", "a", "d"])
+    );
+    assert_eq!(
+        moved_pin(pinned.clone(), "a", "d", true),
+        pins(&["b", "c", "d", "a"])
+    );
+    assert_eq!(
+        moved_pin(pinned, "c", "a", false),
+        pins(&["c", "a", "b", "d"])
+    );
+}
+
+#[test]
+fn test_moved_pin_ignores_unknown_ids_and_self() {
+    let pinned = pins(&["a", "b"]);
+
+    assert_eq!(moved_pin(pinned.clone(), "x", "a", false), pinned);
+    assert_eq!(moved_pin(pinned.clone(), "a", "x", false), pinned);
+    assert_eq!(moved_pin(pinned.clone(), "a", "a", true), pinned);
+}
+
+#[test]
+fn test_with_dock_pinned_adds_a_dock_table_and_keeps_comments() {
+    let contents = "# devices\n[[bluetooth.expected_devices]]\naddress = \"AA\"\n";
+
+    let updated = with_dock_pinned(contents, &["firefox".to_string(), "kitty".to_string()]);
+
+    assert_eq!(
+        updated.unwrap(),
+        concat!(
+            "# devices\n[[bluetooth.expected_devices]]\naddress = \"AA\"\n",
+            "\n[dock]\npinned = [\"firefox\", \"kitty\"]\n"
+        )
+    );
+}
+
+#[test]
+fn test_with_dock_pinned_replaces_the_list_in_place() {
+    let contents = "[dock]\n# my apps\npinned = [\"slack\"]\n";
+
+    let updated = with_dock_pinned(contents, &[]).unwrap();
+
+    assert_eq!(updated, "[dock]\n# my apps\npinned = []\n");
+}
+
+#[test]
+fn test_with_dock_pinned_rejects_invalid_config() {
+    assert!(with_dock_pinned("dock = 1", &[]).is_err());
+    assert!(with_dock_pinned("[dock", &[]).is_err());
+}
+
+#[test]
+fn test_toggled_pin_appends_or_removes() {
+    let pinned = vec!["firefox".to_string(), "kitty".to_string()];
+
+    assert_eq!(
+        toggled_pin(pinned.clone(), "slack"),
+        vec!["firefox", "kitty", "slack"]
+    );
+    assert_eq!(toggled_pin(pinned, "firefox"), vec!["kitty"]);
+}
+
 #[test]
 fn test_config_default_bluetooth_empty() {
     // Test that default config has empty expected devices list

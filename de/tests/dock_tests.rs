@@ -2,6 +2,7 @@ use rusty_de::service::desktop_entry::{self, DesktopEntry};
 use rusty_de::service::hyprland::{Client, Workspace};
 use rusty_de::window::dock::{dock_entries, in_dock_area, is_notified, notifications_of};
 use rusty_de::window::dock::{handle_color, handle_curve, launcher_icon, track_urgent};
+use rusty_de::window::dock::{pin_entries, PinnedSlot};
 use rusty_de::window::dock::{workspace_badge, MINIMIZED_WORKSPACE};
 use std::collections::HashSet;
 
@@ -180,6 +181,87 @@ fn test_dock_entries_put_minimized_last_and_mark_them() {
     );
 }
 
+fn app_client(address: &str, class: &str, workspace_id: i32, workspace_name: &str) -> Client {
+    Client {
+        class: class.to_string(),
+        ..client(address, workspace_id, workspace_name, 0)
+    }
+}
+
+fn pins(ids: &[&str]) -> Vec<String> {
+    ids.iter().map(|id| id.to_string()).collect()
+}
+
+fn slot_names(slots: &[PinnedSlot]) -> Vec<String> {
+    slots
+        .iter()
+        .map(|slot| match slot {
+            PinnedSlot::Running(entry) => entry.client.address.clone(),
+            PinnedSlot::Idle(id) => format!("idle:{}", id),
+        })
+        .collect()
+}
+
+fn split(clients: Vec<Client>, pinned: &[&str]) -> (Vec<String>, Vec<String>) {
+    let (slots, windows) = pin_entries(dock_entries(clients), &pins(pinned), |client| {
+        Some(client.class.clone())
+    });
+    let windows = windows.into_iter().map(|e| e.client.address).collect();
+    (slot_names(&slots), windows)
+}
+
+#[test]
+fn test_pin_entries_keep_pin_order_and_mark_apps_without_windows_idle() {
+    let clients = vec![
+        app_client("term", "kitty", 1, "1"),
+        app_client("web", "firefox", 2, "2"),
+    ];
+
+    let (slots, windows) = split(clients, &["firefox", "slack", "kitty"]);
+
+    assert_eq!(slots, vec!["web", "idle:slack", "term"]);
+    assert!(windows.is_empty());
+}
+
+#[test]
+fn test_pin_entries_pin_only_the_first_window_of_an_app() {
+    let clients = vec![
+        app_client("web2", "firefox", 3, "3"),
+        app_client("web1", "firefox", 1, "1"),
+        app_client("term", "kitty", 2, "2"),
+    ];
+
+    let (slots, windows) = split(clients, &["firefox"]);
+
+    assert_eq!(slots, vec!["web1"]);
+    assert_eq!(windows, vec!["term", "web2"]);
+}
+
+#[test]
+fn test_pin_entries_keep_a_minimized_window_pinned() {
+    let clients = vec![
+        app_client("web", "firefox", -98, MINIMIZED_WORKSPACE),
+        app_client("term", "kitty", 1, "1"),
+    ];
+
+    let (slots, windows) = split(clients, &["firefox"]);
+
+    assert_eq!(slots, vec!["web"]);
+    assert_eq!(windows, vec!["term"]);
+}
+
+#[test]
+fn test_pin_entries_ignore_duplicate_pins_and_unknown_apps() {
+    let (slots, windows) = pin_entries(
+        dock_entries(vec![app_client("unknown", "x", 1, "1")]),
+        &pins(&["slack", "slack"]),
+        |_| None,
+    );
+
+    assert_eq!(slot_names(&slots), vec!["idle:slack"]);
+    assert_eq!(windows.len(), 1);
+}
+
 #[test]
 fn test_parse_desktop_entry_icon() {
     let entry = desktop_entry::parse("[Desktop Entry]\nName=Calc\nIcon=org.gnome.Calculator\n");
@@ -243,7 +325,8 @@ fn test_match_executable_by_exec_program() {
         ),
     ];
 
-    let icon = |program| desktop_entry::match_executable(program, &entries).and_then(|e| e.icon);
+    let icon =
+        |program| desktop_entry::match_executable(program, &entries).and_then(|(_, e)| e.icon);
 
     assert_eq!(icon("alacritty").as_deref(), Some("Alacritty"));
     assert_eq!(icon("brave").as_deref(), Some("brave-logo"));
@@ -263,7 +346,10 @@ fn test_match_window_class_prefers_startup_wm_class() {
 
     let matched = desktop_entry::match_window_class("1password", &entries);
 
-    assert_eq!(matched.and_then(|e| e.icon).as_deref(), Some("by-wm-class"));
+    assert_eq!(
+        matched.and_then(|(_, e)| e.icon).as_deref(),
+        Some("by-wm-class")
+    );
 }
 
 #[test]
@@ -272,7 +358,7 @@ fn test_match_window_class_falls_back_to_desktop_id() {
 
     let matched = desktop_entry::match_window_class("org.gnome.Calculator", &entries);
 
-    assert_eq!(matched.and_then(|e| e.icon).as_deref(), Some("calc"));
+    assert_eq!(matched.and_then(|(_, e)| e.icon).as_deref(), Some("calc"));
 }
 
 #[test]

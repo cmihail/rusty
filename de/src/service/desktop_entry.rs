@@ -124,7 +124,7 @@ pub fn lookup(entry_id: &str) -> Option<DesktopEntry> {
 
 /// Pick the entry for a window class: `StartupWMClass` first, then a desktop id equal to the
 /// class, both case-insensitive. `entries` pairs desktop ids (without `.desktop`) with entries.
-pub fn match_window_class(class: &str, entries: &[(String, DesktopEntry)]) -> Option<DesktopEntry> {
+pub fn match_window_class(class: &str, entries: &[(String, DesktopEntry)]) -> Option<Resolved> {
     if class.is_empty() {
         return None;
     }
@@ -141,7 +141,7 @@ pub fn match_window_class(class: &str, entries: &[(String, DesktopEntry)]) -> Op
             .find(|(id, _)| id.eq_ignore_ascii_case(class))
     };
 
-    by_wm_class.or_else(by_id).map(|(_, entry)| entry.clone())
+    by_wm_class.or_else(by_id).cloned()
 }
 
 fn all_entries() -> Vec<(String, DesktopEntry)> {
@@ -182,7 +182,7 @@ pub fn exec_program(exec: &str) -> Option<&str> {
 }
 
 /// Pick the entry whose `Exec` runs `program`, for windows whose class matches no entry.
-pub fn match_executable(program: &str, entries: &[(String, DesktopEntry)]) -> Option<DesktopEntry> {
+pub fn match_executable(program: &str, entries: &[(String, DesktopEntry)]) -> Option<Resolved> {
     if program.is_empty() {
         return None;
     }
@@ -190,13 +190,15 @@ pub fn match_executable(program: &str, entries: &[(String, DesktopEntry)]) -> Op
     entries
         .iter()
         .find(|(_, entry)| entry.exec.as_deref().and_then(exec_program) == Some(program))
-        .map(|(_, entry)| entry.clone())
+        .cloned()
 }
 
-type LookupCache = OnceLock<Mutex<HashMap<String, Option<DesktopEntry>>>>;
-type Matcher = fn(&str, &[(String, DesktopEntry)]) -> Option<DesktopEntry>;
+/// A desktop id (without `.desktop`) with its entry.
+pub type Resolved = (String, DesktopEntry);
+type LookupCache = OnceLock<Mutex<HashMap<String, Option<Resolved>>>>;
+type Matcher = fn(&str, &[(String, DesktopEntry)]) -> Option<Resolved>;
 
-fn cached_lookup(cache: &LookupCache, key: &str, find: Matcher) -> Option<DesktopEntry> {
+fn cached_lookup(cache: &LookupCache, key: &str, find: Matcher) -> Option<Resolved> {
     let cache = cache.get_or_init(|| Mutex::new(HashMap::new()));
 
     if let Ok(cached) = cache.lock() {
@@ -215,13 +217,13 @@ fn cached_lookup(cache: &LookupCache, key: &str, find: Matcher) -> Option<Deskto
 }
 
 /// Resolve a Hyprland window class to its desktop file, cached per class.
-pub fn lookup_by_window_class(class: &str) -> Option<DesktopEntry> {
+pub fn lookup_by_window_class(class: &str) -> Option<Resolved> {
     static CACHE: LookupCache = OnceLock::new();
     cached_lookup(&CACHE, class, match_window_class)
 }
 
 /// Resolve a program name (as in `/proc/<pid>/exe`) to its desktop file, cached per name.
-pub fn lookup_by_executable(program: &str) -> Option<DesktopEntry> {
+pub fn lookup_by_executable(program: &str) -> Option<Resolved> {
     static CACHE: LookupCache = OnceLock::new();
     cached_lookup(&CACHE, program, match_executable)
 }

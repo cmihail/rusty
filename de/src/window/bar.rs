@@ -2,8 +2,8 @@ use glib::clone;
 use gtk4::gdk::{Key, ModifierType, Monitor, RGBA};
 use gtk4::prelude::*;
 use gtk4::{
-    Align, ApplicationWindow, ArrowType, Box, EventControllerKey, Image, Label, MenuButton,
-    Orientation, Overlay, Popover, PositionType,
+    Align, ApplicationWindow, ArrowType, Box, CenterBox, EventControllerKey, Image, Label,
+    MenuButton, Orientation, Overlay, Popover, PositionType, Separator,
 };
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 use std::cell::{Cell, RefCell};
@@ -18,15 +18,15 @@ use crate::service::notifications::Notifications;
 use crate::widget::circular_progress::CircularProgress;
 use crate::widget::control_center::ControlCenter;
 use crate::window::dock::Dock;
+use crate::window::status_tooltip;
 
 const CIRCULAR_SIZE: i32 = 17;
 const CIRCULAR_IMAGE_SIZE: i32 = 11;
 // The dock's app icon size, and its item spacing plus the inset on both sides of an icon.
 const DOCK_STATUS_SIZE: i32 = 32;
 const DOCK_STATUS_SPACING: i32 = 16;
-const BAR_SPACING: i32 = 4;
-// One pixel over CIRCULAR_SIZE so the circle and the digits get even gaps in the same height.
-const BAR_BATTERY_SIZE: i32 = 18;
+
+const BAR_STATUS_SIZE: i32 = 19;
 
 const BAR_ALERT_CLASSES: [&str; 2] = ["Offline", "Notified"];
 
@@ -149,8 +149,7 @@ impl Bar {
 
         main_overlay.set_child(Some(&overlay_box));
 
-        // Setup tooltip
-        Self::setup_tooltip(bar_button);
+        status_tooltip::connect(bar_button);
         Self::connect_border_alert(bar_button);
 
         window.set_child(Some(&main_overlay));
@@ -288,17 +287,23 @@ impl Bar {
     }
 
     fn create_bar_contents() -> Box {
-        let container = Box::new(Orientation::Horizontal, BAR_SPACING);
-        container.set_halign(Align::Center);
+        let container = Box::new(Orientation::Vertical, 0);
 
         let time_label = Label::new(Some("--:--"));
         time_label.add_css_class("TimeLabel");
+        time_label.set_halign(Align::Center);
         container.append(&time_label);
 
-        let battery = Self::create_battery_state(BAR_BATTERY_SIZE);
-        battery.set_valign(Align::Center);
-        battery.add_css_class("BarBattery");
-        container.append(&battery);
+        let bottom_row = CenterBox::new();
+        bottom_row.add_css_class("BarStacks");
+        bottom_row.set_start_widget(Some(&Self::create_network_state(BAR_STATUS_SIZE)));
+
+        let separator = Separator::new(Orientation::Vertical);
+        separator.add_css_class("BarDotSeparator");
+        bottom_row.set_center_widget(Some(&separator));
+
+        bottom_row.set_end_widget(Some(&Self::create_battery_state(BAR_STATUS_SIZE)));
+        container.append(&bottom_row);
 
         Self::setup_time_updates(&time_label);
 
@@ -325,6 +330,7 @@ impl Bar {
         // set_popover takes the popover's position from this, overriding set_position.
         button.set_direction(ArrowType::Left);
         button.set_child(Some(&status));
+        status_tooltip::connect(&button);
         button
     }
 
@@ -990,60 +996,6 @@ impl Bar {
         });
 
         update_count();
-    }
-
-    fn setup_tooltip(button: &MenuButton) {
-        let battery = Battery::instance();
-
-        let update_tooltip = {
-            let battery = battery.clone();
-            let button = button.clone();
-            move || {
-                let percentage = (battery.percentage() * 100.0).round() as i32;
-                let mut text = format!("Battery: {}%", percentage);
-
-                let time_to_full = battery.time_to_full();
-                if time_to_full != 0 {
-                    text.push_str(&format!(
-                        "\nCharging: {}",
-                        Self::seconds_to_pretty_time(time_to_full)
-                    ));
-                }
-
-                let time_to_empty = battery.time_to_empty();
-                if time_to_empty != 0 {
-                    text.push_str(&format!(
-                        "\nRemaining: {}",
-                        Self::seconds_to_pretty_time(time_to_empty)
-                    ));
-                }
-
-                button.set_tooltip_text(Some(&text));
-            }
-        };
-
-        battery.connect_notify_local(Some("percentage"), {
-            let update_tooltip = update_tooltip.clone();
-            move |_, _| update_tooltip()
-        });
-
-        battery.connect_notify_local(Some("time-to-full"), {
-            let update_tooltip = update_tooltip.clone();
-            move |_, _| update_tooltip()
-        });
-
-        battery.connect_notify_local(Some("time-to-empty"), {
-            let update_tooltip = update_tooltip.clone();
-            move |_, _| update_tooltip()
-        });
-
-        update_tooltip();
-    }
-
-    fn seconds_to_pretty_time(seconds: i64) -> String {
-        let hours = seconds / 3600;
-        let minutes = (seconds % 3600) / 60;
-        format!("{}h:{}m", hours, minutes)
     }
 
     fn color_with_alpha(widget: &impl WidgetExt) -> RGBA {
