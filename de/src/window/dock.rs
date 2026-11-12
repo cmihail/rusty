@@ -596,6 +596,7 @@ fn icon_with_badge(icon: Image, badge_text: Option<String>, notified: bool) -> O
 fn item_button(state: &Rc<DockState>, entry: DockEntry, notified: bool) -> Widget {
     let client = &entry.client;
     let class = client.class.clone();
+    let address = client.address.clone();
     let button = Button::new();
     button.add_css_class("DockItem");
     let badge = workspace_badge(&client.workspace);
@@ -623,15 +624,33 @@ fn item_button(state: &Rc<DockState>, entry: DockEntry, notified: bool) -> Widge
             hide(&state);
         }
     ));
+    button.add_controller(click_controller(3, move || close_window(&address)));
     if notified {
-        let right_click = GestureClick::builder().button(3).build();
-        right_click.connect_pressed(move |gesture, _, _, _| {
-            gesture.set_state(gtk4::EventSequenceState::Claimed);
-            dismiss_notifications_of(&class);
-        });
-        button.add_controller(right_click);
+        button.add_controller(click_controller(2, move || dismiss_notifications_of(&class)));
     }
     button.upcast()
+}
+
+fn click_controller(button: u32, action: impl Fn() + 'static) -> GestureClick {
+    let click = GestureClick::builder().button(button).build();
+    click.connect_pressed(move |gesture, _, _, _| {
+        gesture.set_state(gtk4::EventSequenceState::Claimed);
+        action();
+    });
+    click
+}
+
+fn close_window(address: &str) {
+    let Some(hyprland) = Hyprland::instance() else {
+        return;
+    };
+    let window = address_arg(address);
+    if let Err(e) = hyprland.dispatch(
+        &format!("hl.dsp.window.close({{ window = '{}' }})", window),
+        &format!("closewindow {}", window),
+    ) {
+        log::warn!("dock: failed to close {}: {}", window, e);
+    }
 }
 
 /// The program a process runs. A binary replaced by an upgrade reads as "name (deleted)".

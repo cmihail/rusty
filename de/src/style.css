@@ -138,9 +138,10 @@ window.Dock label.DockBadge.notified {
 window.Bar menubutton.Bar > button:first-child {
   border: 1px solid @borders;
   border-radius: 7px;
-  min-height: 0;
-  /* The time label's descent already adds empty space under the digits. */
-  padding: 3px 4px 2px;
+  padding-bottom: 3px;
+  padding-left: 2px;
+  padding-right: 2px;
+  padding-top: 1px;
   opacity: 0.9;
 }
 
@@ -157,18 +158,19 @@ window.Bar menubutton.Bar > button:first-child label {
 }
 
 window.Bar menubutton.Bar > button:first-child label.TimeLabel {
-  font-size: 15px;
+  font-size: 14px;
   letter-spacing: 0;
-}
-
-/* Lifts the circle to the digits' center, which sits above the label's because of descent. */
-window.Bar overlay.BarBattery {
-  margin-bottom: 2px;
 }
 
 window.Bar menubutton.Bar > button:first-child label.WorkspaceDigit {
   font-size: 12px;
   margin-left: 5px;
+}
+
+separator.BarDotSeparator {
+  background: @theme_text_color;
+  margin-top: 6px;
+  margin-bottom: 6px;
 }
 
 window.Bar box.Overlay {
