@@ -1,4 +1,4 @@
-use rusty_de::window::bar::bar_alert_class;
+use rusty_de::window::bar::{bar_alert_class, notifications_progress};
 
 #[test]
 fn test_seconds_to_pretty_time() {
@@ -1130,4 +1130,12 @@ fn test_bar_alert_class_for_notifications() {
 fn test_bar_alert_class_prefers_offline_over_notifications() {
     assert_eq!(bar_alert_class(false, 0), Some("Offline"));
     assert_eq!(bar_alert_class(false, 4), Some("Offline"));
+}
+
+#[test]
+fn test_notifications_progress() {
+    assert_eq!(notifications_progress(0), 0.0);
+    assert_eq!(notifications_progress(3), 0.3);
+    assert_eq!(notifications_progress(10), 1.0);
+    assert_eq!(notifications_progress(25), 1.0);
 }

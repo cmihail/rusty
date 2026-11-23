@@ -25,5 +25,7 @@
     <file compressed="true">scalable/devices/plus-symbolic.svg</file>
     <file compressed="true">scalable/actions/dock-pinned-symbolic.svg</file>
     <file compressed="true">scalable/actions/dock-unpinned-symbolic.svg</file>
+    <file compressed="true">scalable/actions/workspace-tiling-symbolic.svg</file>
+    <file compressed="true">scalable/actions/workspace-scrolling-symbolic.svg</file>
   </gresource>
 </gresources>

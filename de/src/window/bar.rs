@@ -2,8 +2,8 @@ use glib::clone;
 use gtk4::gdk::{Key, ModifierType, Monitor, RGBA};
 use gtk4::prelude::*;
 use gtk4::{
-    Align, ApplicationWindow, ArrowType, Box, CenterBox, EventControllerKey, Image, Label,
-    MenuButton, Orientation, Overlay, Popover, PositionType, Separator,
+    Align, ApplicationWindow, ArrowType, Box, CenterBox, EventControllerKey, Grid, Image, Label,
+    MenuButton, Orientation, Overlay, Popover, PositionType,
 };
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 use std::cell::{Cell, RefCell};
@@ -22,11 +22,12 @@ use crate::window::status_tooltip;
 
 const CIRCULAR_SIZE: i32 = 17;
 const CIRCULAR_IMAGE_SIZE: i32 = 11;
-// The dock's app icon size, and its item spacing plus the inset on both sides of an icon.
-const DOCK_STATUS_SIZE: i32 = 32;
-const DOCK_STATUS_SPACING: i32 = 16;
+const DOCK_STATUS_SPACING: i32 = 2;
+// The ring fills one step per notification, full from this count on.
+const NOTIFICATIONS_FULL: usize = 10;
 
-const BAR_STATUS_SIZE: i32 = 19;
+// Even, so the 12px icon centers on whole pixels inside its ring.
+const BAR_STATUS_SIZE: i32 = 20;
 
 const BAR_ALERT_CLASSES: [&str; 2] = ["Offline", "Notified"];
 
@@ -39,6 +40,11 @@ pub fn bar_alert_class(online: bool, notifications: usize) -> Option<&'static st
     } else {
         None
     }
+}
+
+/// How full the dock's notification ring is for `count` notifications.
+pub fn notifications_progress(count: usize) -> f64 {
+    count.min(NOTIFICATIONS_FULL) as f64 / NOTIFICATIONS_FULL as f64
 }
 
 type ProgressCalculator = Rc<RefCell<Option<std::boxed::Box<dyn Fn()>>>>;
@@ -298,10 +304,6 @@ impl Bar {
         bottom_row.add_css_class("BarStacks");
         bottom_row.set_start_widget(Some(&Self::create_network_state(BAR_STATUS_SIZE)));
 
-        let separator = Separator::new(Orientation::Vertical);
-        separator.add_css_class("BarDotSeparator");
-        bottom_row.set_center_widget(Some(&separator));
-
         bottom_row.set_end_widget(Some(&Self::create_battery_state(BAR_STATUS_SIZE)));
         container.append(&bottom_row);
 
@@ -311,17 +313,17 @@ impl Bar {
     }
 
     fn create_dock_status() -> MenuButton {
-        let status = Box::new(Orientation::Vertical, DOCK_STATUS_SPACING);
-        status.append(&Self::create_dock_notifications_count());
-        for icon in [
-            Self::create_microphone_state(DOCK_STATUS_SIZE),
-            Self::create_speaker_state(DOCK_STATUS_SIZE),
-            Self::create_bluetooth_state(DOCK_STATUS_SIZE),
-            Self::create_network_state(DOCK_STATUS_SIZE),
-            Self::create_battery_state(DOCK_STATUS_SIZE),
-        ] {
-            icon.set_halign(Align::Center);
-            status.append(&icon);
+        let status = Grid::new();
+        status.set_row_spacing(DOCK_STATUS_SPACING as u32);
+        status.set_column_spacing(DOCK_STATUS_SPACING as u32);
+        let icons = [
+            Self::create_notifications_state(BAR_STATUS_SIZE),
+            Self::create_bluetooth_state(BAR_STATUS_SIZE),
+            Self::create_microphone_state(BAR_STATUS_SIZE),
+            Self::create_speaker_state(BAR_STATUS_SIZE),
+        ];
+        for (index, icon) in icons.iter().enumerate() {
+            status.attach(icon, index as i32 % 2, index as i32 / 2, 1, 1);
         }
 
         let button = MenuButton::new();
@@ -911,29 +913,41 @@ impl Bar {
         circular.set_color(Self::color_with_alpha(image));
     }
 
-    fn create_dock_notifications_count() -> Label {
-        let label = Label::new(Some("0"));
-        label.add_css_class("DockNotificationsCount");
-        label.set_valign(Align::Center);
+    fn create_notifications_state(size: i32) -> Overlay {
+        let overlay = Overlay::new();
+        overlay.set_halign(Align::Start);
+
+        let circular = CircularProgress::new(size, Self::line_width(size), true);
+        overlay.set_child(Some(circular.widget()));
+
+        let image = Image::from_icon_name("preferences-system-notifications-symbolic");
+        image.set_pixel_size(size * CIRCULAR_IMAGE_SIZE / CIRCULAR_SIZE);
+        overlay.add_overlay(&image);
 
         Self::connect_notification_count(clone!(
             #[weak]
-            label,
-            move |count| {
-                label.set_label(&Self::notification_count_text(count));
-                label.set_visible(count > 0);
-            }
+            image,
+            move |count| Self::update_notifications_widget(count, &image, &circular)
         ));
 
-        label
+        overlay
     }
 
-    fn notification_count_text(count: usize) -> String {
-        if count > 9 {
-            "+".to_string()
+    fn update_notifications_widget(count: usize, image: &Image, circular: &CircularProgress) {
+        let icon = if Notifications::instance().dont_disturb() {
+            "notifications-disabled-symbolic"
         } else {
-            count.to_string()
+            "preferences-system-notifications-symbolic"
+        };
+        image.set_icon_name(Some(icon));
+
+        image.remove_css_class("Warning");
+        if count > 0 {
+            image.add_css_class("Warning");
         }
+
+        circular.set_percentage(notifications_progress(count));
+        circular.set_color(Self::color_with_alpha(image));
     }
 
     /// Calls `update` now and on every change with the count shown to the user, 0 under DND.

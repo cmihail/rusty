@@ -125,6 +125,41 @@ impl Hyprland {
         false
     }
 
+    /// The tiled layout of the workspace with `id`, e.g. `dwindle` or `scrolling`.
+    pub fn workspace_layout(&self, id: i32) -> Option<String> {
+        let json = imp::Hyprland::message(&request_socket_path()?, "j/workspaces").ok()?;
+        let workspaces: Vec<WorkspaceLayoutJson> = serde_json::from_str(&json).ok()?;
+        workspaces
+            .into_iter()
+            .find(|workspace| workspace.id == id)
+            .map(|workspace| workspace.tiled_layout)
+    }
+
+    /// The `general:layout` option, the layout of workspaces without a layout rule.
+    pub fn default_layout(&self) -> Option<String> {
+        let json =
+            imp::Hyprland::message(&request_socket_path()?, "j/getoption general:layout").ok()?;
+        let option: OptionJson = serde_json::from_str(&json).ok()?;
+        option.str
+    }
+
+    /// Re-lays out workspace `id` with `layout` until the config is reloaded. The rule merges
+    /// into the workspace's existing rule, so its monitor and other settings stay.
+    pub fn set_workspace_layout(&self, id: i32, layout: &str) -> Result<(), String> {
+        let lua = format!(
+            "hl.workspace_rule({{ workspace = '{}', layout = '{}' }})",
+            id, layout
+        );
+        if run_hyprctl(&["eval", &lua])?.trim() == "ok" {
+            return Ok(());
+        }
+        let keyword = format!("{}, layout:{}", id, layout);
+        match run_hyprctl(&["keyword", "workspace", &keyword])?.trim() {
+            "ok" => Ok(()),
+            other => Err(format!("hyprctl rejected the layout rule: {}", other)),
+        }
+    }
+
     /// Runs `lua` (e.g. `hl.dsp.window.close()`) under a Lua config, falling back to
     /// `legacy` (e.g. `killactive`) when Hyprland runs a hyprlang config.
     pub fn dispatch(&self, lua: &str, legacy: &str) -> Result<(), String> {
@@ -140,16 +175,20 @@ impl Hyprland {
 const LEGACY_REJECTION: &str = "Invalid dispatcher";
 
 fn run_hyprctl_dispatch(arg: &str) -> Result<String, String> {
+    run_hyprctl(&["dispatch", arg])
+}
+
+fn run_hyprctl(args: &[&str]) -> Result<String, String> {
     use std::process::Command;
 
     let output = Command::new("hyprctl")
-        .args(["dispatch", arg])
+        .args(args)
         .output()
         .map_err(|e| format!("Failed to run hyprctl: {}", e))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("hyprctl dispatch failed: {}", stderr));
+        return Err(format!("hyprctl {} failed: {}", args[0], stderr));
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
@@ -224,6 +263,18 @@ struct ClientJson {
     monitor: i32,
     #[serde(default)]
     pid: i32,
+}
+
+#[derive(Debug, Deserialize)]
+struct WorkspaceLayoutJson {
+    id: i32,
+    #[serde(rename = "tiledLayout")]
+    tiled_layout: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct OptionJson {
+    str: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

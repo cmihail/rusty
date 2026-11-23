@@ -2,6 +2,7 @@ use rusty_de::service::desktop_entry::{self, DesktopEntry};
 use rusty_de::service::hyprland::{Client, Workspace};
 use rusty_de::window::dock::{dock_entries, in_dock_area, is_notified, notifications_of};
 use rusty_de::window::dock::{handle_color, handle_curve, launcher_icon, track_urgent};
+use rusty_de::window::dock::{layout_icon, toggled_layout};
 use rusty_de::window::dock::{pin_entries, PinnedSlot};
 use rusty_de::window::dock::{workspace_badge, MINIMIZED_WORKSPACE};
 use std::collections::HashSet;
@@ -367,4 +368,22 @@ fn test_match_window_class_no_match() {
 
     assert_eq!(desktop_entry::match_window_class("brave", &entries), None);
     assert_eq!(desktop_entry::match_window_class("", &entries), None);
+}
+
+#[test]
+fn test_toggled_layout_switches_tiling_to_scrolling() {
+    assert_eq!(toggled_layout("dwindle", "dwindle"), "scrolling");
+    assert_eq!(toggled_layout("master", "dwindle"), "scrolling");
+}
+
+#[test]
+fn test_toggled_layout_returns_to_default_tiling() {
+    assert_eq!(toggled_layout("scrolling", "master"), "master");
+    assert_eq!(toggled_layout("scrolling", "scrolling"), "dwindle");
+}
+
+#[test]
+fn test_layout_icon_matches_layout() {
+    assert_eq!(layout_icon("scrolling"), "workspace-scrolling-symbolic");
+    assert_eq!(layout_icon("dwindle"), "workspace-tiling-symbolic");
 }

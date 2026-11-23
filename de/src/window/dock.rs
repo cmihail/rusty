@@ -31,6 +31,9 @@ const FALLBACK_ICON: &str = "application-x-executable";
 const LAUNCHER: &str = ".local/bin/rusty-universal-search-wrapped";
 const LAUNCHER_ICONS: &[&str] = &["view-app-grid-symbolic", "system-search-symbolic"];
 const RESIZE_EVENTS: &[&str] = &["openwindow", "closewindow", "movewindowv2"];
+const LAYOUT_EVENTS: &[&str] = &["workspacev2", "moveworkspacev2", "configreloaded"];
+pub const SCROLLING_LAYOUT: &str = "scrolling";
+const FALLBACK_TILING_LAYOUT: &str = "dwindle";
 const HANDLE_THICKNESS: i32 = 8;
 const HANDLE_EDGE: f64 = 1.0;
 const BADGE_INSET: i32 = 5;
@@ -123,6 +126,26 @@ pub fn workspace_badge(workspace: &Workspace) -> Option<String> {
         id if id < 0 => Some("S".to_string()),
         id if id > 9 => Some("+".to_string()),
         id => Some(id.to_string()),
+    }
+}
+
+/// The layout a workspace switches to: scrolling from tiling, and back to the default tiling
+/// layout, or dwindle when scrolling is the default.
+pub fn toggled_layout(current: &str, default: &str) -> String {
+    if current != SCROLLING_LAYOUT {
+        SCROLLING_LAYOUT.to_string()
+    } else if default != SCROLLING_LAYOUT {
+        default.to_string()
+    } else {
+        FALLBACK_TILING_LAYOUT.to_string()
+    }
+}
+
+pub fn layout_icon(layout: &str) -> &'static str {
+    if layout == SCROLLING_LAYOUT {
+        "workspace-scrolling-symbolic"
+    } else {
+        "workspace-tiling-symbolic"
     }
 }
 
@@ -229,6 +252,7 @@ struct DockState {
     rebuild_pending: Cell<bool>,
     dragging: Cell<bool>,
     pinned_end: RefCell<Option<Widget>>,
+    layout_toggle: RefCell<Option<Button>>,
 }
 
 pub struct Dock {
@@ -270,6 +294,7 @@ impl Dock {
             rebuild_pending: Cell::new(false),
             dragging: Cell::new(false),
             pinned_end: RefCell::new(None),
+            layout_toggle: RefCell::new(None),
         });
 
         let trigger = Self::create_trigger(app, monitor, &state);
@@ -451,6 +476,9 @@ impl Dock {
             if resize {
                 update_handle(&state);
             }
+            if LAYOUT_EVENTS.contains(&event.as_str()) && state.window.is_visible() {
+                update_layout_toggle(&state);
+            }
             None
         });
     }
@@ -621,6 +649,7 @@ fn rebuild(state: &Rc<DockState>) {
     let notified_classes = notification_classes();
 
     state.items.append(&launcher_button(state));
+    state.items.append(&layout_toggle_button(state));
     append_pinned(state, slots, &notified_classes);
     append_windows(state, windows, &notified_classes);
     place_status(state);
@@ -717,6 +746,81 @@ fn launcher_button(state: &Rc<DockState>) -> Button {
         }
     ));
     button
+}
+
+fn layout_toggle_button(state: &Rc<DockState>) -> Button {
+    let button = Button::new();
+    button.add_css_class("DockItem");
+    button.add_css_class("DockLayoutToggle");
+    button.connect_clicked(clone!(
+        #[weak]
+        state,
+        move |_| {
+            toggle_layout(&state);
+            update_layout_toggle(&state);
+        }
+    ));
+    state.layout_toggle.replace(Some(button.clone()));
+    update_layout_toggle(state);
+    button
+}
+
+/// The active workspace of the dock's monitor. Named workspaces have no number to badge or
+/// to match a workspace rule by, so they are left out.
+fn active_workspace(state: &DockState) -> Option<Workspace> {
+    Hyprland::instance()?
+        .monitors()
+        .into_iter()
+        .find(|monitor| monitor.name == state.connector)
+        .map(|monitor| monitor.active_workspace)
+        .filter(|workspace| workspace.id > 0)
+}
+
+fn update_layout_toggle(state: &DockState) {
+    let Some(button) = state.layout_toggle.borrow().clone() else {
+        return;
+    };
+    let workspace = active_workspace(state);
+    let layout = workspace.as_ref().and_then(|workspace| {
+        Hyprland::instance().and_then(|hyprland| hyprland.workspace_layout(workspace.id))
+    });
+    let (Some(workspace), Some(layout)) = (workspace, layout) else {
+        button.set_visible(false);
+        return;
+    };
+    let image = Image::from_icon_name(layout_icon(&layout));
+    image.set_pixel_size(ICON_SIZE);
+    button.set_child(Some(&icon_with_badge(
+        image,
+        workspace_badge(&workspace),
+        false,
+    )));
+    button.set_tooltip_text(Some(&format!(
+        "Workspace {}: {} layout",
+        workspace.id, layout
+    )));
+    button.set_visible(true);
+}
+
+fn toggle_layout(state: &DockState) {
+    let (Some(hyprland), Some(workspace)) = (Hyprland::instance(), active_workspace(state)) else {
+        return;
+    };
+    let Some(current) = hyprland.workspace_layout(workspace.id) else {
+        return;
+    };
+    let default = hyprland
+        .default_layout()
+        .unwrap_or_else(|| FALLBACK_TILING_LAYOUT.to_string());
+    let layout = toggled_layout(&current, &default);
+    if let Err(e) = hyprland.set_workspace_layout(workspace.id, &layout) {
+        log::warn!(
+            "dock: failed to set workspace {} to {}: {}",
+            workspace.id,
+            layout,
+            e
+        );
+    }
 }
 
 fn launch() {

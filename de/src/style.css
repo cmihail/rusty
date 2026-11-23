@@ -142,19 +142,9 @@ window.Dock label.DockBadge {
   padding: 0;
 }
 
-window.Dock label.DockNotificationsCount {
-  border: 2px solid @warning_color;
-  border-radius: 100px;
-  color: @warning_color;
-  font-size: 14px;
-  font-weight: bold;
-  min-height: 28px;
-  min-width: 28px;
-}
-
 window.Dock menubutton.DockStatus > button {
   border-radius: 8px;
-  padding: 6px 4px;
+  padding: 4px 1px;
 }
 
 window.Dock label.DockBadge.notified {
@@ -191,12 +181,6 @@ window.Bar menubutton.Bar > button:first-child label.TimeLabel {
 window.Bar menubutton.Bar > button:first-child label.WorkspaceDigit {
   font-size: 12px;
   margin-left: 5px;
-}
-
-separator.BarDotSeparator {
-  background: @theme_text_color;
-  margin-top: 6px;
-  margin-bottom: 6px;
 }
 
 window.Bar box.Overlay {
