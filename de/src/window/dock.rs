@@ -827,19 +827,23 @@ fn launch() {
     let Some(home) = std::env::var_os("HOME") else {
         return;
     };
-    run_in_scope(Path::new(&home).join(LAUNCHER).as_os_str(), &[]);
+    run_in_scope(Path::new(&home).join(LAUNCHER).as_os_str(), &[], &[]);
 }
 
 fn launch_app(id: &str) {
-    run_in_scope(OsStr::new("gtk-launch"), &["--", id]);
+    let current = std::env::var("XDG_DATA_DIRS").ok();
+    let data_dirs = desktop_entry::launch_data_dirs(current.as_deref());
+    let env = [("XDG_DATA_DIRS", data_dirs.as_str())];
+    run_in_scope(OsStr::new("gtk-launch"), &["--", id], &env);
 }
 
 /// Runs in its own scope so what it starts outlives a rusty-de restart.
-fn run_in_scope(program: &OsStr, args: &[&str]) {
+fn run_in_scope(program: &OsStr, args: &[&str], env: &[(&str, &str)]) {
     let spawned = Command::new("systemd-run")
         .args(["--user", "--scope", "--"])
         .arg(program)
         .args(args)
+        .envs(env.iter().copied())
         .spawn();
     match spawned {
         Ok(mut child) => {

@@ -19,6 +19,24 @@ const EXTRA_APPLICATION_DIRS: &[&str] = &[
     "/usr/share/applications",
 ];
 
+/// `current` XDG_DATA_DIRS with the data dirs of the always searched application dirs
+/// appended, so launchers like gtk-launch find the same apps the dock shows.
+pub fn launch_data_dirs(current: Option<&str>) -> String {
+    let current = current
+        .filter(|dirs| !dirs.is_empty())
+        .unwrap_or("/usr/local/share:/usr/share");
+    let mut dirs: Vec<&str> = current.split(':').filter(|d| !d.is_empty()).collect();
+    for extra in EXTRA_APPLICATION_DIRS {
+        let Some(data_dir) = extra.strip_suffix("/applications") else {
+            continue;
+        };
+        if !dirs.iter().any(|d| d.trim_end_matches('/') == data_dir) {
+            dirs.push(data_dir);
+        }
+    }
+    dirs.join(":")
+}
+
 fn application_dirs() -> Vec<PathBuf> {
     let mut dirs = Vec::new();
 

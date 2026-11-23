@@ -387,3 +387,35 @@ fn test_layout_icon_matches_layout() {
     assert_eq!(layout_icon("scrolling"), "workspace-scrolling-symbolic");
     assert_eq!(layout_icon("dwindle"), "workspace-tiling-symbolic");
 }
+
+#[test]
+fn test_launch_data_dirs_appends_missing_snap_and_flatpak_dirs() {
+    let dirs = desktop_entry::launch_data_dirs(Some("/usr/local/share/:/usr/share/"));
+    assert_eq!(
+        dirs,
+        "/usr/local/share/:/usr/share/:/var/lib/snapd/desktop:/var/lib/flatpak/exports/share"
+    );
+}
+
+#[test]
+fn test_launch_data_dirs_keeps_present_dirs_once() {
+    let current = "/var/lib/snapd/desktop:/usr/share:/home/u/.nix-profile/share";
+    let dirs = desktop_entry::launch_data_dirs(Some(current));
+    assert_eq!(
+        dirs,
+        format!(
+            "{}:/var/lib/flatpak/exports/share:/usr/local/share",
+            current
+        )
+    );
+}
+
+#[test]
+fn test_launch_data_dirs_uses_spec_default_when_unset() {
+    for current in [None, Some("")] {
+        assert_eq!(
+            desktop_entry::launch_data_dirs(current),
+            "/usr/local/share:/usr/share:/var/lib/snapd/desktop:/var/lib/flatpak/exports/share"
+        );
+    }
+}
