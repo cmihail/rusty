@@ -102,20 +102,19 @@ pub fn pin_entries(
     (slots, remaining.into_iter().flatten().collect())
 }
 
-/// Whether `cursor` is in the right-center area covered by the dock and its hover strip.
+/// Whether `cursor` is in the left-center area covered by the dock and its hover strip.
 /// `monitor` is (x, y, width, height) and `dock_size` is (width, height), in layout pixels.
 pub fn in_dock_area(
     cursor: (i32, i32),
     monitor: (i32, i32, i32, i32),
     dock_size: (i32, i32),
 ) -> bool {
-    let (x, y, width, height) = monitor;
+    let (x, y, _, height) = monitor;
     let area_height = dock_size.1.max(TRIGGER_LENGTH);
     let top = y + (height - area_height) / 2;
     let bottom = top + area_height;
-    let right = x + width;
-    let left = right - dock_size.0.max(1);
-    (left..right).contains(&cursor.0) && (top..bottom).contains(&cursor.1)
+    let right = x + dock_size.0.max(1);
+    (x..right).contains(&cursor.0) && (top..bottom).contains(&cursor.1)
 }
 
 /// The workspace badge: its number, "+" past 9 like the notification count, and "S" for
@@ -338,7 +337,7 @@ impl Dock {
 
         window.init_layer_shell();
         window.set_layer(Layer::Overlay);
-        window.set_anchor(Edge::Right, true);
+        window.set_anchor(Edge::Left, true);
         window.set_monitor(Some(monitor));
         window.set_keyboard_mode(KeyboardMode::None);
         window.set_exclusive_zone(0);
@@ -503,10 +502,11 @@ fn draw_handle(area: &DrawingArea, cr: &gtk4::cairo::Context, width: i32, height
         log::warn!("dock: the theme defines no {}", name);
         return;
     };
-    // The curve is built for a bottom handle, so swapping the axes stands it on the right edge.
+    // The curve is built for a bottom handle, so swapping and mirroring the axes stands it
+    // on the left edge.
     let (width, height) = (height as f64, width as f64);
     let [start, first, second, end] = handle_curve(width, height);
-    cr.transform(gtk4::cairo::Matrix::new(0.0, 1.0, 1.0, 0.0, 0.0, 0.0));
+    cr.transform(gtk4::cairo::Matrix::new(0.0, 1.0, -1.0, 0.0, height, 0.0));
     cr.set_source_rgb(
         color.red() as f64,
         color.green() as f64,
@@ -594,10 +594,10 @@ fn debug_watch_edge(state: &Rc<DockState>) {
         };
         let geometry = state.monitor.geometry();
         let on_strip = debug_cursor().filter(|&(x, y)| {
-            let right = geometry.x() + geometry.width();
+            let left = geometry.x();
             let top = geometry.y() + (geometry.height() - state.handle.height()) / 2;
-            x >= right - HANDLE_THICKNESS
-                && x < right
+            x >= left
+                && x < left + HANDLE_THICKNESS
                 && (top..top + state.handle.height()).contains(&y)
         });
         let missed = on_strip.is_some() && !state.window.is_visible();
@@ -1262,7 +1262,7 @@ fn open_popover(state: &Rc<DockState>, button: &Button, content: Widget, interac
         .can_target(interactive)
         .autohide(false)
         .has_arrow(true)
-        .position(PositionType::Left)
+        .position(PositionType::Right)
         .build();
     popover.add_css_class("DockMenu");
 

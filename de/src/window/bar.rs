@@ -330,7 +330,7 @@ impl Bar {
         button.add_css_class("DockStatus");
         button.set_halign(Align::Center);
         // set_popover takes the popover's position from this, overriding set_position.
-        button.set_direction(ArrowType::Left);
+        button.set_direction(ArrowType::Right);
         button.set_child(Some(&status));
         status_tooltip::connect(&button);
         button
@@ -356,7 +356,7 @@ impl Bar {
             bar_button,
             move |dock_button| {
                 bar_button.set_popover(None::<&Popover>);
-                popover.set_position(PositionType::Left);
+                popover.set_position(PositionType::Right);
                 dock_button.set_popover(Some(&popover));
             }
         ));

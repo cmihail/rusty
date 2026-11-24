@@ -98,34 +98,34 @@ fn test_track_urgent_until_focused_or_closed() {
 
 #[test]
 fn test_in_dock_area_covers_the_dock() {
-    assert!(in_dock_area((1919, 600), MONITOR, (56, 600)));
-    assert!(in_dock_area((1864, 301), MONITOR, (56, 600)));
-    assert!(!in_dock_area((1863, 600), MONITOR, (56, 600)));
-    assert!(!in_dock_area((1919, 900), MONITOR, (56, 600)));
+    assert!(in_dock_area((0, 600), MONITOR, (56, 600)));
+    assert!(in_dock_area((55, 301), MONITOR, (56, 600)));
+    assert!(!in_dock_area((56, 600), MONITOR, (56, 600)));
+    assert!(!in_dock_area((0, 900), MONITOR, (56, 600)));
 }
 
 #[test]
 fn test_in_dock_area_covers_the_strip_beside_a_short_dock() {
     // A 150px dock is shorter than the 400px strip that opened it.
-    assert!(in_dock_area((1919, 401), MONITOR, (56, 150)));
-    assert!(in_dock_area((1919, 799), MONITOR, (56, 150)));
-    assert!(!in_dock_area((1919, 399), MONITOR, (56, 150)));
-    assert!(!in_dock_area((1919, 800), MONITOR, (56, 150)));
+    assert!(in_dock_area((0, 401), MONITOR, (56, 150)));
+    assert!(in_dock_area((0, 799), MONITOR, (56, 150)));
+    assert!(!in_dock_area((0, 399), MONITOR, (56, 150)));
+    assert!(!in_dock_area((0, 800), MONITOR, (56, 150)));
 }
 
 #[test]
 fn test_in_dock_area_uses_the_monitor_offset() {
     let second = (1920, 100, 2560, 1440);
 
-    assert!(in_dock_area((4479, 820), second, (56, 300)));
+    assert!(in_dock_area((1920, 820), second, (56, 300)));
     assert!(!in_dock_area((1919, 820), second, (56, 300)));
-    assert!(!in_dock_area((4479, 100), second, (56, 300)));
+    assert!(!in_dock_area((1920, 100), second, (56, 300)));
 }
 
 #[test]
 fn test_in_dock_area_before_the_dock_has_a_size() {
-    assert!(in_dock_area((1919, 600), MONITOR, (0, 0)));
-    assert!(!in_dock_area((1918, 600), MONITOR, (0, 0)));
+    assert!(in_dock_area((0, 600), MONITOR, (0, 0)));
+    assert!(!in_dock_area((1, 600), MONITOR, (0, 0)));
 }
 
 fn client(address: &str, workspace_id: i32, workspace_name: &str, x: i32) -> Client {

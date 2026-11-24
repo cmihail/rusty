@@ -83,7 +83,7 @@ window.Dock box.DockItems {
   background-color: @theme_bg_color;
   border: 1px solid @borders;
   border-radius: 10px;
-  margin-right: 4px;
+  margin-left: 4px;
   padding: 6px 4px;
   opacity: 0.95;
 }
