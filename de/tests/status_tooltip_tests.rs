@@ -67,7 +67,10 @@ fn test_network_text_wired() {
     info.wired_id = "Office";
     assert_eq!(network_text(&info), "Network: Wired Office");
     info.wired_product = "RTL8111";
-    assert_eq!(network_text(&info), "Network: Wired Office\n  Device: RTL8111");
+    assert_eq!(
+        network_text(&info),
+        "Network: Wired Office\n  Device: RTL8111"
+    );
 }
 
 #[test]
@@ -77,7 +80,10 @@ fn test_bluetooth_text() {
         bluetooth_text(true, &[device("Mouse", false, None)]),
         "Bluetooth: On, 0 connected, 1 paired"
     );
-    let devices = [device("Keyboard", true, Some(80)), device("Buds", true, None)];
+    let devices = [
+        device("Keyboard", true, Some(80)),
+        device("Buds", true, None),
+    ];
     assert_eq!(
         bluetooth_text(true, &devices),
         "Bluetooth: On, 2 connected, 2 paired\n  Keyboard\n    Battery: 80%\n    Address: \
@@ -88,5 +94,8 @@ fn test_bluetooth_text() {
 #[test]
 fn test_audio_text() {
     assert_eq!(audio_text("Volume", 0.454, false), "Volume: 45%");
-    assert_eq!(audio_text("Microphone", 0.6, true), "Microphone: Muted (60%)");
+    assert_eq!(
+        audio_text("Microphone", 0.6, true),
+        "Microphone: Muted (60%)"
+    );
 }

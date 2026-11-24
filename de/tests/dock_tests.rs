@@ -98,34 +98,34 @@ fn test_track_urgent_until_focused_or_closed() {
 
 #[test]
 fn test_in_dock_area_covers_the_dock() {
-    assert!(in_dock_area((0, 600), MONITOR, (56, 600)));
-    assert!(in_dock_area((55, 301), MONITOR, (56, 600)));
-    assert!(!in_dock_area((56, 600), MONITOR, (56, 600)));
-    assert!(!in_dock_area((0, 900), MONITOR, (56, 600)));
+    assert!(in_dock_area((960, 1199), MONITOR, (600, 56)));
+    assert!(in_dock_area((660, 1144), MONITOR, (600, 56)));
+    assert!(!in_dock_area((960, 1143), MONITOR, (600, 56)));
+    assert!(!in_dock_area((300, 1199), MONITOR, (600, 56)));
 }
 
 #[test]
 fn test_in_dock_area_covers_the_strip_beside_a_short_dock() {
-    // A 150px dock is shorter than the 400px strip that opened it.
-    assert!(in_dock_area((0, 401), MONITOR, (56, 150)));
-    assert!(in_dock_area((0, 799), MONITOR, (56, 150)));
-    assert!(!in_dock_area((0, 399), MONITOR, (56, 150)));
-    assert!(!in_dock_area((0, 800), MONITOR, (56, 150)));
+    // A 150px dock is narrower than the 400px strip that opened it.
+    assert!(in_dock_area((760, 1199), MONITOR, (150, 56)));
+    assert!(in_dock_area((1159, 1199), MONITOR, (150, 56)));
+    assert!(!in_dock_area((759, 1199), MONITOR, (150, 56)));
+    assert!(!in_dock_area((1160, 1199), MONITOR, (150, 56)));
 }
 
 #[test]
 fn test_in_dock_area_uses_the_monitor_offset() {
     let second = (1920, 100, 2560, 1440);
 
-    assert!(in_dock_area((1920, 820), second, (56, 300)));
-    assert!(!in_dock_area((1919, 820), second, (56, 300)));
-    assert!(!in_dock_area((1920, 100), second, (56, 300)));
+    assert!(in_dock_area((3200, 1539), second, (300, 56)));
+    assert!(!in_dock_area((3200, 1540), second, (300, 56)));
+    assert!(!in_dock_area((2999, 1539), second, (300, 56)));
 }
 
 #[test]
 fn test_in_dock_area_before_the_dock_has_a_size() {
-    assert!(in_dock_area((0, 600), MONITOR, (0, 0)));
-    assert!(!in_dock_area((1, 600), MONITOR, (0, 0)));
+    assert!(in_dock_area((960, 1199), MONITOR, (0, 0)));
+    assert!(!in_dock_area((960, 1198), MONITOR, (0, 0)));
 }
 
 fn client(address: &str, workspace_id: i32, workspace_name: &str, x: i32) -> Client {

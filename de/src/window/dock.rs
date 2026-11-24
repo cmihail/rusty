@@ -102,19 +102,20 @@ pub fn pin_entries(
     (slots, remaining.into_iter().flatten().collect())
 }
 
-/// Whether `cursor` is in the left-center area covered by the dock and its hover strip.
+/// Whether `cursor` is in the bottom-center area covered by the dock and its hover strip.
 /// `monitor` is (x, y, width, height) and `dock_size` is (width, height), in layout pixels.
 pub fn in_dock_area(
     cursor: (i32, i32),
     monitor: (i32, i32, i32, i32),
     dock_size: (i32, i32),
 ) -> bool {
-    let (x, y, _, height) = monitor;
-    let area_height = dock_size.1.max(TRIGGER_LENGTH);
-    let top = y + (height - area_height) / 2;
-    let bottom = top + area_height;
-    let right = x + dock_size.0.max(1);
-    (x..right).contains(&cursor.0) && (top..bottom).contains(&cursor.1)
+    let (x, y, width, height) = monitor;
+    let area_width = dock_size.0.max(TRIGGER_LENGTH);
+    let left = x + (width - area_width) / 2;
+    let right = left + area_width;
+    let bottom = y + height;
+    let top = bottom - dock_size.1.max(1);
+    (left..right).contains(&cursor.0) && (top..bottom).contains(&cursor.1)
 }
 
 /// The workspace badge: its number, "+" past 9 like the notification count, and "S" for
@@ -267,13 +268,13 @@ impl Dock {
             .unwrap_or_default();
 
         let window = Self::layer_window(app, monitor, "Dock");
-        let items = Box::new(Orientation::Vertical, 6);
+        let items = Box::new(Orientation::Horizontal, 6);
         items.add_css_class("DockItems");
         window.set_child(Some(&items));
 
         let handle = DrawingArea::builder()
-            .content_width(HANDLE_THICKNESS)
-            .content_height(1)
+            .content_width(1)
+            .content_height(HANDLE_THICKNESS)
             .build();
         handle.set_draw_func(draw_handle);
 
@@ -281,7 +282,7 @@ impl Dock {
             window,
             items,
             status,
-            status_separator: Separator::new(Orientation::Horizontal),
+            status_separator: Separator::new(Orientation::Vertical),
             held: Cell::new(false),
             handle,
             monitor: monitor.clone(),
@@ -337,7 +338,7 @@ impl Dock {
 
         window.init_layer_shell();
         window.set_layer(Layer::Overlay);
-        window.set_anchor(Edge::Left, true);
+        window.set_anchor(Edge::Bottom, true);
         window.set_monitor(Some(monitor));
         window.set_keyboard_mode(KeyboardMode::None);
         window.set_exclusive_zone(0);
@@ -502,11 +503,8 @@ fn draw_handle(area: &DrawingArea, cr: &gtk4::cairo::Context, width: i32, height
         log::warn!("dock: the theme defines no {}", name);
         return;
     };
-    // The curve is built for a bottom handle, so swapping and mirroring the axes stands it
-    // on the left edge.
-    let (width, height) = (height as f64, width as f64);
+    let (width, height) = (width as f64, height as f64);
     let [start, first, second, end] = handle_curve(width, height);
-    cr.transform(gtk4::cairo::Matrix::new(0.0, 1.0, -1.0, 0.0, height, 0.0));
     cr.set_source_rgb(
         color.red() as f64,
         color.green() as f64,
@@ -594,11 +592,11 @@ fn debug_watch_edge(state: &Rc<DockState>) {
         };
         let geometry = state.monitor.geometry();
         let on_strip = debug_cursor().filter(|&(x, y)| {
-            let left = geometry.x();
-            let top = geometry.y() + (geometry.height() - state.handle.height()) / 2;
-            x >= left
-                && x < left + HANDLE_THICKNESS
-                && (top..top + state.handle.height()).contains(&y)
+            let left = geometry.x() + (geometry.width() - state.handle.width()) / 2;
+            let bottom = geometry.y() + geometry.height();
+            y >= bottom - HANDLE_THICKNESS
+                && y < bottom
+                && (left..left + state.handle.width()).contains(&x)
         });
         let missed = on_strip.is_some() && !state.window.is_visible();
         if missed && !reported.replace(true) {
@@ -657,7 +655,7 @@ fn rebuild(state: &Rc<DockState>) {
 
 fn append_pinned(state: &Rc<DockState>, slots: Vec<PinnedSlot>, notified_classes: &[String]) {
     if !slots.is_empty() {
-        state.items.append(&Separator::new(Orientation::Horizontal));
+        state.items.append(&Separator::new(Orientation::Vertical));
     }
     let mut last = None;
     for slot in slots {
@@ -692,7 +690,7 @@ fn append_windows(state: &Rc<DockState>, windows: Vec<DockEntry>, notified_class
     let mut previous_minimized = false;
     for (index, entry) in windows.into_iter().enumerate() {
         if index == 0 || (entry.minimized && !previous_minimized) {
-            state.items.append(&Separator::new(Orientation::Horizontal));
+            state.items.append(&Separator::new(Orientation::Vertical));
         }
         previous_minimized = entry.minimized;
         let notified = is_notified(&entry.client.class, notified_classes);
@@ -713,8 +711,8 @@ fn place_status(state: &DockState) {
         .items
         .reorder_child_after(&state.status, Some(&state.status_separator));
 
-    let (_, dock_height, _, _) = state.items.measure(Orientation::Vertical, -1);
-    state.handle.set_content_height(dock_height.max(1));
+    let (_, dock_width, _, _) = state.items.measure(Orientation::Horizontal, -1);
+    state.handle.set_content_width(dock_width.max(1));
 }
 
 /// The first launcher icon the theme has, or the generic executable icon.
@@ -1028,7 +1026,7 @@ fn save_pins(pinned: Vec<String>) {
     }
 }
 
-/// A pinned item is dropped on another pinned item to move next to it, or below the pinned
+/// A pinned item is dropped on another pinned item to move next to it, or after the pinned
 /// section to unpin.
 fn connect_pin_drag(state: &Rc<DockState>, item: &Widget, id: &str) {
     item.add_controller(pin_drag_source(state, item, id));
@@ -1067,18 +1065,18 @@ fn pin_drag_source(state: &Rc<DockState>, item: &Widget, id: &str) -> DragSource
 
 fn pin_drop_target(id: &str) -> DropTarget {
     let target = DropTarget::new(glib::Type::STRING, DragAction::MOVE);
-    target.connect_motion(|target, _, y| {
-        mark_drop_side(target, Some(drops_after(target, y)));
+    target.connect_motion(|target, x, _| {
+        mark_drop_side(target, Some(drops_after(target, x)));
         DragAction::MOVE
     });
     target.connect_leave(|target| mark_drop_side(target, None));
     let id = id.to_string();
-    target.connect_drop(move |target, value, _, y| {
+    target.connect_drop(move |target, value, x, _| {
         mark_drop_side(target, None);
         let Ok(dragged) = value.get::<String>() else {
             return false;
         };
-        let after = drops_after(target, y);
+        let after = drops_after(target, x);
         save_pins(moved_pin(
             Config::instance().dock_pinned(),
             &dragged,
@@ -1090,10 +1088,10 @@ fn pin_drop_target(id: &str) -> DropTarget {
     target
 }
 
-fn drops_after(target: &DropTarget, y: f64) -> bool {
+fn drops_after(target: &DropTarget, x: f64) -> bool {
     target
         .widget()
-        .is_some_and(|item| y > f64::from(item.height()) / 2.0)
+        .is_some_and(|item| x > f64::from(item.width()) / 2.0)
 }
 
 fn mark_drop_side(target: &DropTarget, after: Option<bool>) {
@@ -1109,16 +1107,16 @@ fn mark_drop_side(target: &DropTarget, after: Option<bool>) {
     }
 }
 
-/// Drops the pinned items' own targets do not take land here, and unpin below the pinned
+/// Drops the pinned items' own targets do not take land here, and unpin after the pinned
 /// section.
 fn connect_unpin_drop(state: &Rc<DockState>) {
     let target = DropTarget::new(glib::Type::STRING, DragAction::MOVE);
     let weak = Rc::downgrade(state);
-    target.connect_drop(move |_, value, _, y| {
+    target.connect_drop(move |_, value, x, _| {
         let (Some(state), Ok(id)) = (weak.upgrade(), value.get::<String>()) else {
             return false;
         };
-        if !below_pinned(&state, y) {
+        if !after_pinned(&state, x) {
             return false;
         }
         let mut pinned = Config::instance().dock_pinned();
@@ -1129,7 +1127,7 @@ fn connect_unpin_drop(state: &Rc<DockState>) {
     state.items.add_controller(target);
 }
 
-fn below_pinned(state: &DockState, y: f64) -> bool {
+fn after_pinned(state: &DockState, x: f64) -> bool {
     let last = state.pinned_end.borrow();
     let Some(bounds) = last
         .as_ref()
@@ -1137,7 +1135,7 @@ fn below_pinned(state: &DockState, y: f64) -> bool {
     else {
         return false;
     };
-    y > f64::from(bounds.y() + bounds.height())
+    x > f64::from(bounds.x() + bounds.width())
 }
 
 fn menu(actions: &[Button]) -> Widget {
@@ -1262,7 +1260,7 @@ fn open_popover(state: &Rc<DockState>, button: &Button, content: Widget, interac
         .can_target(interactive)
         .autohide(false)
         .has_arrow(true)
-        .position(PositionType::Right)
+        .position(PositionType::Top)
         .build();
     popover.add_css_class("DockMenu");
 

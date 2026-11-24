@@ -64,7 +64,10 @@ pub fn network_text(info: &NetworkInfo) -> String {
         NetworkType::Wifi => {
             let mut text = format!("Network: Wi-Fi {}\n  Signal: {}%", info.ssid, info.strength);
             if info.frequency != 0 {
-                text.push_str(&format!("\n  Frequency: {}", frequency_text(info.frequency)));
+                text.push_str(&format!(
+                    "\n  Frequency: {}",
+                    frequency_text(info.frequency)
+                ));
             }
             text
         }
@@ -164,7 +167,10 @@ pub fn connect(widget: &impl IsA<Widget>) {
         &["percentage", "time-to-full", "time-to-empty"],
     );
     watch(network.upcast_ref(), &["state", "primary"]);
-    watch(network.wifi().upcast_ref(), &["ssid", "strength", "frequency"]);
+    watch(
+        network.wifi().upcast_ref(),
+        &["ssid", "strength", "frequency"],
+    );
     watch(
         network.ethernet().upcast_ref(),
         &["connection-id", "device-product"],
