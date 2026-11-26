@@ -942,6 +942,7 @@ impl SearchWindow {
                 if let Err(e) = app_info.launch(&[], None::<&gio::AppLaunchContext>) {
                     eprintln!("Failed to launch {}: {}", name, e);
                 } else {
+                    apps::show_launch_spinner(&desktop_id);
                     // Update recent usage (move to front)
                     recent_usage_clone
                         .borrow_mut()

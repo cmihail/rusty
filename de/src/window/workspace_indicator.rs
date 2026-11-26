@@ -88,7 +88,7 @@ fn show(window: &ApplicationWindow, revealer: &Revealer, generation: &Rc<Cell<u6
     });
 }
 
-fn focused_monitor() -> Option<Monitor> {
+pub(crate) fn focused_monitor() -> Option<Monitor> {
     let name = Hyprland::instance()?.focused_monitor()?.name;
     let monitors = Display::default()?.monitors();
     (0..monitors.n_items())

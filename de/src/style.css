@@ -67,6 +67,24 @@ window.WorkspaceIndicator label {
   min-width: 80px;
 }
 
+window.LaunchSpinner {
+  background-color: alpha(@theme_bg_color, 0.9);
+  border: 1px solid @borders;
+  border-radius: 16px;
+  padding: 24px 32px;
+}
+
+window.LaunchSpinner progressbar trough {
+  min-height: 6px;
+  border-radius: 3px;
+}
+
+window.LaunchSpinner progressbar progress {
+  min-height: 6px;
+  border-radius: 3px;
+  background-color: @theme_selected_bg_color;
+}
+
 window.Bar {
   background-color: transparent;
 }

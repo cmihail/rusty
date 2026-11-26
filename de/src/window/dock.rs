@@ -18,6 +18,7 @@ use crate::service::desktop_entry;
 use crate::service::hyprland::{address_arg, Client, Hyprland, Workspace};
 use crate::service::network::{Network, NetworkState};
 use crate::service::notifications::Notifications;
+use crate::window::launch_spinner;
 
 pub const MINIMIZED_WORKSPACE: &str = "special:minimized";
 
@@ -832,11 +833,13 @@ fn launch_app(id: &str) {
     let current = std::env::var("XDG_DATA_DIRS").ok();
     let data_dirs = desktop_entry::launch_data_dirs(current.as_deref());
     let env = [("XDG_DATA_DIRS", data_dirs.as_str())];
-    run_in_scope(OsStr::new("gtk-launch"), &["--", id], &env);
+    if run_in_scope(OsStr::new("gtk-launch"), &["--", id], &env) {
+        launch_spinner::show(id);
+    }
 }
 
 /// Runs in its own scope so what it starts outlives a rusty-de restart.
-fn run_in_scope(program: &OsStr, args: &[&str], env: &[(&str, &str)]) {
+fn run_in_scope(program: &OsStr, args: &[&str], env: &[(&str, &str)]) -> bool {
     let spawned = Command::new("systemd-run")
         .args(["--user", "--scope", "--"])
         .arg(program)
@@ -846,8 +849,12 @@ fn run_in_scope(program: &OsStr, args: &[&str], env: &[(&str, &str)]) {
     match spawned {
         Ok(mut child) => {
             std::thread::spawn(move || child.wait());
+            true
         }
-        Err(e) => log::warn!("dock: failed to start {}: {}", program.to_string_lossy(), e),
+        Err(e) => {
+            log::warn!("dock: failed to start {}: {}", program.to_string_lossy(), e);
+            false
+        }
     }
 }
 

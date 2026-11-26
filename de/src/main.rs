@@ -173,6 +173,7 @@ fn update_power_profile_based_on_battery(
 fn setup_on_screen_display(app: &Application) {
     let _osd = window::on_screen_display::OnScreenDisplay::new(app);
     let _workspace = window::workspace_indicator::WorkspaceIndicator::new(app);
+    window::launch_spinner::init(app);
 }
 
 fn setup_notification_popups(app: &Application) {
@@ -428,20 +429,41 @@ fn toggle_control_center_via_dbus() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn setup_dbus_server(bars: std::rc::Rc<std::cell::RefCell<Vec<window::bar::Bar>>>) {
-    use zbus::interface;
+struct ControlCenterInterface {
+    toggle_tx: async_channel::Sender<()>,
+}
 
-    struct ControlCenterInterface {
-        toggle_tx: async_channel::Sender<()>,
+#[zbus::interface(name = "com.cmihail.RustyDE.ControlCenter")]
+impl ControlCenterInterface {
+    fn toggle(&self) {
+        let _ = self.toggle_tx.send_blocking(());
     }
+}
 
-    #[interface(name = "com.cmihail.RustyDE.ControlCenter")]
-    impl ControlCenterInterface {
-        fn toggle(&self) {
-            let _ = self.toggle_tx.send_blocking(());
+struct LauncherInterface {
+    launch_tx: async_channel::Sender<String>,
+}
+
+#[zbus::interface(name = "com.cmihail.RustyDE.Launcher")]
+impl LauncherInterface {
+    fn show(&self, desktop_id: String) {
+        let _ = self.launch_tx.send_blocking(desktop_id);
+    }
+}
+
+fn launcher_interface() -> LauncherInterface {
+    let (launch_tx, launch_rx) = async_channel::unbounded::<String>();
+    glib::spawn_future_local(async move {
+        while let Ok(desktop_id) = launch_rx.recv().await {
+            window::launch_spinner::show(&desktop_id);
         }
-    }
+    });
+    LauncherInterface { launch_tx }
+}
 
+fn control_center_interface(
+    bars: std::rc::Rc<std::cell::RefCell<Vec<window::bar::Bar>>>,
+) -> ControlCenterInterface {
     let (toggle_tx, toggle_rx) = async_channel::unbounded::<()>();
 
     // Listen for toggle requests on GTK main thread
@@ -466,13 +488,17 @@ fn setup_dbus_server(bars: std::rc::Rc<std::cell::RefCell<Vec<window::bar::Bar>>
             }
         }
     });
+    ControlCenterInterface { toggle_tx }
+}
+
+fn setup_dbus_server(bars: std::rc::Rc<std::cell::RefCell<Vec<window::bar::Bar>>>) {
+    let interface = control_center_interface(bars);
+    let launcher = launcher_interface();
 
     // Setup D-Bus server on separate thread
     std::thread::spawn(move || {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async move {
-            let interface = ControlCenterInterface { toggle_tx };
-
             let connection = match zbus::Connection::session().await {
                 Ok(conn) => conn,
                 Err(e) => {
@@ -484,6 +510,10 @@ fn setup_dbus_server(bars: std::rc::Rc<std::cell::RefCell<Vec<window::bar::Bar>>
             if let Err(e) = connection.object_server().at(DBUS_PATH, interface).await {
                 eprintln!("Failed to register D-Bus object: {}", e);
                 return;
+            }
+
+            if let Err(e) = connection.object_server().at(DBUS_PATH, launcher).await {
+                eprintln!("Failed to register D-Bus launcher: {}", e);
             }
 
             if let Err(e) = connection.request_name(DBUS_NAME).await {

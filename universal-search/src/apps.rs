@@ -32,7 +32,9 @@ impl Application {
 
     pub fn launch(&self) -> Result<(), glib::Error> {
         self.app_info
-            .launch(&[], Option::<&gio::AppLaunchContext>::None)
+            .launch(&[], Option::<&gio::AppLaunchContext>::None)?;
+        show_launch_spinner(&self.desktop_id);
+        Ok(())
     }
 
     fn fuzzy_match_score(&self, query: &str) -> f64 {
@@ -61,6 +63,27 @@ impl Application {
         // Fuzzy match algorithm
         fuzzy_match_string(&query_lower, &name_lower)
     }
+}
+
+const SPINNER_TIMEOUT_MS: i32 = 200;
+
+/// Asks rusty-de to show its launch spinner. Does nothing when rusty-de isn't running.
+pub fn show_launch_spinner(desktop_id: &str) {
+    let Ok(bus) = gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE) else {
+        return;
+    };
+    // Synchronous so the call is sent before the search window closes and the process exits.
+    let _ = bus.call_sync(
+        Some("com.cmihail.RustyDE"),
+        "/com/cmihail/RustyDE",
+        "com.cmihail.RustyDE.Launcher",
+        "Show",
+        Some(&(desktop_id,).to_variant()),
+        None,
+        gio::DBusCallFlags::NO_AUTO_START,
+        SPINNER_TIMEOUT_MS,
+        gio::Cancellable::NONE,
+    );
 }
 
 impl PartialEq for Application {
